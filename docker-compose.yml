@@ -1,0 +1,30 @@
+# TurismoUQ · Oracle XE 21c en contenedor
+# Funciona igual en Windows (Docker Desktop) y Linux (Docker Engine).
+# Usa la imagen gvenzl/oracle-xe: es una imagen open-source que
+# empaqueta el mismo Oracle Database XE 21c, pero se descarga sin
+# necesidad de crear una cuenta en el Oracle Container Registry
+# (que sí exige la imagen oficial "container-registry.oracle.com").
+services:
+  turismouq-db:
+    image: gvenzl/oracle-xe:21-slim-faststart
+    container_name: turismouq-db
+    ports:
+      - "1521:1521"   # listener Oracle
+      - "5500:5500"   # Enterprise Manager Express (opcional)
+    environment:
+      ORACLE_PASSWORD: "TurismoUQ2026*"        # password de SYS/SYSTEM
+      APP_USER: "turismouq"                    # esquema del proyecto
+      APP_USER_PASSWORD: "TurismoUQ2026*"
+    volumes:
+      - turismouq-data:/opt/oracle/oradata
+      - ./sql:/docker-entrypoint-initdb.d/startup   # scripts .sql que se
+                                                      # corren SOLO la primera
+                                                      # vez que se crea la BD
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+volumes:
+  turismouq-data:
