@@ -17,9 +17,13 @@ services:
       APP_USER_PASSWORD: "TurismoUQ2026*"
     volumes:
       - turismouq-data:/opt/oracle/oradata
-      - ./sql:/docker-entrypoint-initdb.d/startup   # scripts .sql que se
-                                                      # corren SOLO la primera
-                                                      # vez que se crea la BD
+      # Scripts .sql que se corren SOLO la primera vez que se crea la BD
+      # (si el volumen ya tiene datos, se saltan por completo).
+      #   sql/startup/*.sql -> se ejecutan primero, conectados AS SYSDBA
+      #                        (crear tablespaces, usuarios, grants)
+      #   sql/*.sql         -> se ejecutan despues, conectados como el
+      #                        APP_USER (turismouq): DDL y carga de datos
+      - ./sql:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD", "healthcheck.sh"]
       interval: 15s
