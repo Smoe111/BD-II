@@ -30,19 +30,28 @@ SET LINESIZE 200
 -- del anio como columnas.
 -- =====================================================================
 PROMPT
-PROMPT === 1. Ocupacion por municipio y mes (PIVOT) ===
-SELECT * FROM (
+PROMPT === 1. Ocupacion por municipio y mes, en % (PIVOT) ===
+SELECT
+    municipio,
+    NVL(ene,0) AS ene_pct, NVL(feb,0) AS feb_pct, NVL(mar,0) AS mar_pct,
+    NVL(abr,0) AS abr_pct, NVL(may,0) AS may_pct, NVL(jun,0) AS jun_pct,
+    NVL(jul,0) AS jul_pct, NVL(ago,0) AS ago_pct, NVL(sep,0) AS sep_pct,
+    NVL(oct,0) AS oct_pct, NVL(nov,0) AS nov_pct, NVL(dic,0) AS dic_pct
+FROM (
     SELECT
         m.nombre AS municipio,
         EXTRACT(MONTH FROM rh.fecha_checkin) AS mes,
-        rh.id_habitacion
+        ROUND(
+            RATIO_TO_REPORT(COUNT(rh.id_habitacion)) OVER (PARTITION BY m.nombre) * 100, 2
+        ) AS pct
     FROM municipio m
-    JOIN alojamiento a       ON m.id_municipio = a.id_municipio
-    JOIN habitacion h        ON a.id_alojamiento = h.id_alojamiento
+    JOIN alojamiento a         ON m.id_municipio = a.id_municipio
+    JOIN habitacion h          ON a.id_alojamiento = h.id_alojamiento
     JOIN reserva_habitacion rh ON h.id_habitacion = rh.id_habitacion
+    GROUP BY m.nombre, EXTRACT(MONTH FROM rh.fecha_checkin)
 )
 PIVOT (
-    COUNT(id_habitacion)
+    SUM(pct)
     FOR mes IN (
         1 AS ene, 2 AS feb, 3 AS mar, 4 AS abr,
         5 AS may, 6 AS jun, 7 AS jul, 8 AS ago,
@@ -50,31 +59,66 @@ PIVOT (
     )
 )
 ORDER BY municipio;
-
 -- =====================================================================
 -- 2. Ingresos por municipio, tipo de alojamiento y temporada (CUBE)
 -- ---------------------------------------------------------------------
 -- Total facturado por habitaciones, con subtotales por cada combinacion
 -- de dimensiones y el gran total, usando GROUPING para etiquetarlos.
 -- =====================================================================
+-- La temporada de cada reserva_habitacion se resuelve en la vista
+-- V_RH_TEMPORADA, con esta PRIORIDAD:
+--   1) Temporada con ajuste (porcentaje distinto de 0: Semana Santa,
+--      decembrina, vacaciones, receso, o un descuento): siempre gana.
+--   2) Si la temporada es la baja (0 %) y el check-in es viernes o
+--      sabado (los dias pico de la carga de datos): FIN DE SEMANA.
+--   3) Si no: la temporada registrada (Temporada baja).
+--   (Si algun dia quedara sin temporada: TEMPORADA ORDINARIA.)
+-- Para actualizar: basta insertar/editar filas en TEMPORADA; la consulta
+-- no se toca. Para cambiar dias de fin de semana o nombres de los
+-- comodines, solo se edita la vista.
+-- =====================================================================
 PROMPT
-PROMPT === 2. Ingresos por municipio, tipo de alojamiento y temporada (CUBE) ===
+PROMPT === 2. Creando vista v_rh_temporada ===
+CREATE OR REPLACE VIEW v_rh_temporada AS
+SELECT id_reserva, id_habitacion, fecha_checkin, valor_reserva, temporada
+FROM (
+    SELECT
+        rh.id_reserva,
+        rh.id_habitacion,
+        rh.fecha_checkin,
+        rh.valor_reserva,
+        CASE
+            WHEN t.porcentaje <> 0 THEN t.nombre
+            WHEN TO_CHAR(rh.fecha_checkin, 'DY', 'NLS_DATE_LANGUAGE=ENGLISH')
+                 IN ('FRI', 'SAT')             THEN 'FIN DE SEMANA'
+            ELSE COALESCE(t.nombre, 'TEMPORADA ORDINARIA')
+        END AS temporada,
+        ROW_NUMBER() OVER (
+            PARTITION BY rh.ROWID
+            ORDER BY (t.fecha_fin - t.fecha_inicio) ASC NULLS LAST
+        ) AS rn
+    FROM reserva_habitacion rh
+    LEFT JOIN temporada t
+           ON rh.fecha_checkin BETWEEN t.fecha_inicio AND t.fecha_fin
+)
+WHERE rn = 1;
+ 
+PROMPT === 2. Ingresos por municipio, tipo y temporada (CUBE) ===
 SELECT
-    CASE WHEN GROUPING(m.nombre)  = 1 THEN 'TODOS LOS MUNICIPIOS'  ELSE m.nombre  END AS municipio,
-    CASE WHEN GROUPING(ta.nombre) = 1 THEN 'TODOS LOS TIPOS'       ELSE ta.nombre END AS tipo_alojamiento,
-    CASE WHEN GROUPING(t.nombre)  = 1 THEN 'TODAS LAS TEMPORADAS'  ELSE t.nombre  END AS temporada,
-    SUM(rh.valor_reserva) AS ingreso_total
+    CASE WHEN GROUPING(m.nombre)  = 1 THEN 'TODOS LOS MUNICIPIOS' ELSE m.nombre  END AS municipio,
+    CASE WHEN GROUPING(ta.nombre) = 1 THEN 'TODOS LOS TIPOS'      ELSE ta.nombre END AS tipo_alojamiento,
+    CASE WHEN GROUPING(vt.temporada) = 1 THEN 'TODAS LAS TEMPORADAS' ELSE vt.temporada END AS temporada,
+    SUM(vt.valor_reserva) AS ingreso_total
 FROM municipio m
-JOIN alojamiento a         ON m.id_municipio = a.id_municipio
-JOIN tipo_alojamiento ta   ON a.id_tipo_alojamiento = ta.id_tipo_alojamiento
-JOIN habitacion h          ON a.id_alojamiento = h.id_alojamiento
-JOIN reserva_habitacion rh ON h.id_habitacion = rh.id_habitacion
-JOIN temporada t           ON rh.fecha_checkin BETWEEN t.fecha_inicio AND t.fecha_fin
-GROUP BY CUBE(m.nombre, ta.nombre, t.nombre)
+JOIN alojamiento a       ON m.id_municipio = a.id_municipio
+JOIN tipo_alojamiento ta ON a.id_tipo_alojamiento = ta.id_tipo_alojamiento
+JOIN habitacion h        ON a.id_alojamiento = h.id_alojamiento
+JOIN v_rh_temporada vt   ON h.id_habitacion = vt.id_habitacion
+GROUP BY CUBE(m.nombre, ta.nombre, vt.temporada)
 ORDER BY
     GROUPING(m.nombre),
     GROUPING(ta.nombre),
-    GROUPING(t.nombre),
+    GROUPING(vt.temporada),
     municipio;
 
 -- =====================================================================
