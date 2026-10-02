@@ -141,7 +141,9 @@ WITH ingresos_alojamiento AS (
     JOIN reserva_habitacion rh ON h.id_habitacion = rh.id_habitacion
     GROUP BY m.id_municipio, m.nombre, a.id_alojamiento, a.nombre
 )
-SELECT municipio, alojamiento, total_ingresos, ranking
+SELECT municipio, alojamiento, total_ingresos, ranking,
+-- Columna adicional: porcentaje de ingresos del alojamiento sobre el total del municipio
+ROUND(total_ingresos / NULLIF(total_municipio, 0) * 100, 2) AS pct_ingreso_municipio
 FROM ingresos_alojamiento
 WHERE ranking <= 3
 ORDER BY municipio, ranking;
@@ -194,8 +196,14 @@ SELECT DISTINCT
     a.nombre AS alojamiento,
     r.fecha_checkin,
     r.fecha_checkout,
-    r.valor_total,
-    r.estado
+    -- Reservas canceladas: no se calcula el valor total
+    CASE WHEN r.estado = 'CANCELADA' THEN - 
+         ELSE r.valor_total
+    END AS valor_total,
+    -- Reservas canceladas se muestran simplemente como FINALIZADA
+    CASE WHEN r.estado = 'CANCELADA' THEN 'FINALIZADA'
+         ELSE r.estado
+    END AS estado
 FROM reserva r
 JOIN usuario_sistema u     ON r.id_usuario_sistema = u.id_usuario_sistema
 JOIN cliente c              ON r.id_cliente = c.id_cliente
@@ -206,7 +214,6 @@ JOIN municipio m            ON a.id_municipio = m.id_municipio
 WHERE r.fecha_checkin >= TO_DATE(:fecha_inicio, 'YYYY-MM-DD')
   AND r.fecha_checkin <= TO_DATE(:fecha_fin,    'YYYY-MM-DD')
 ORDER BY r.fecha_checkin ASC;
-
 -- =====================================================================
 -- 6. Vista materializada de ocupacion mensual
 -- ---------------------------------------------------------------------
