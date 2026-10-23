@@ -24,6 +24,11 @@ sql/
   04_consultas.sql      8 consultas analíticas (PIVOT, CUBE, RANK, LAG,
                         variables de enlace, vista materializada, UNPIVOT
                         y una consulta de negocio propuesta)
+  05_liquidacion_tabla.sql   Entrega 2: tabla LIQUIDACION_MENSUAL
+  06_pkg_turismo.sql         Entrega 2: paquete PKG_TURISMO (fn_valor_estadia,
+                             sp_liquidar_mes con cursor explicito con parametros)
+  07_liquidacion_pruebas.sql Entrega 2: ejecucion y cuadres de la liquidacion
+                             (se corre a mano, como 04)
 docker-compose.yml      Contenedor de Oracle XE
 ```
 
