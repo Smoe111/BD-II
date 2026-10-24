@@ -1,0 +1,131 @@
+-- =====================================================================
+-- TurismoUQ · Bases de Datos II · Entrega 2
+-- Script 05 · Estructuras de apoyo de la capa PL/SQL
+-- ---------------------------------------------------------------------
+-- Se ejecuta despues de 01-04 (en Docker corre solo, en orden alfabetico).
+--
+--   1. Temporadas de 2027: la carga cubre 2024-2026 y fn_valor_estadia
+--      se niega a valorar noches sin temporada. Sin estas filas nadie
+--      podria reservar a partir del 1 de enero de 2027.
+--   2. AUDITORIA_TARIFA   -> la llena el trigger trg_tarifa_auditoria.
+--   3. LIQUIDACION_MENSUAL -> la llena pkg_turismo.sp_liquidar_mes.
+--
+-- El enunciado permite agregar tablas ("pueden agregar las que necesiten,
+-- no quitar"): el modelo pasa de 17 a 19 tablas, sin tocar ninguna.
+-- =====================================================================
+
+ALTER SESSION SET CONTAINER = XEPDB1;
+ALTER SESSION SET CURRENT_SCHEMA = turismouq;
+
+SET SERVEROUTPUT ON SIZE UNLIMITED
+
+-- ---------------------------------------------------------------------
+-- 0. Limpieza (permite volver a correr el script)
+-- ---------------------------------------------------------------------
+BEGIN
+  FOR t IN (SELECT table_name FROM user_tables
+             WHERE table_name IN ('AUDITORIA_TARIFA', 'LIQUIDACION_MENSUAL')) LOOP
+    EXECUTE IMMEDIATE 'DROP TABLE "' || t.table_name || '" CASCADE CONSTRAINTS PURGE';
+  END LOOP;
+  FOR s IN (SELECT sequence_name FROM user_sequences
+             WHERE sequence_name IN ('SEQ_AUDITORIA_TARIFA', 'SEQ_AUDITORIA_SENTENCIA',
+                                     'SEQ_LIQUIDACION')) LOOP
+    EXECUTE IMMEDIATE 'DROP SEQUENCE ' || s.sequence_name;
+  END LOOP;
+END;
+/
+
+-- ---------------------------------------------------------------------
+-- 1. Temporadas 2027 (mismo calendario que 2024-2026)
+--    Semana Santa 2027: Domingo de Ramos 21/03 a Resurreccion 28/03.
+-- ---------------------------------------------------------------------
+DECLARE
+  PROCEDURE ins(p_nombre VARCHAR2, p_desc VARCHAR2, p_pct NUMBER,
+                p_ini DATE, p_fin DATE) IS
+  BEGIN
+    INSERT INTO temporada (nombre, descripcion, porcentaje, fecha_inicio, fecha_fin)
+    SELECT p_nombre, p_desc, p_pct, p_ini, p_fin FROM dual
+     WHERE NOT EXISTS (SELECT 1 FROM temporada WHERE fecha_inicio = p_ini);
+  END;
+BEGIN
+  ins('Vacaciones de enero',  'Cierre de las vacaciones escolares 2027', 35, DATE '2027-01-01', DATE '2027-01-15');
+  ins('Temporada baja',       'Enero a marzo 2027',                       0, DATE '2027-01-16', DATE '2027-03-20');
+  ins('Semana Santa',         'Domingo de Ramos a Resurreccion 2027',    40, DATE '2027-03-21', DATE '2027-03-28');
+  ins('Temporada baja',       'Abril a junio 2027',                       0, DATE '2027-03-29', DATE '2027-06-14');
+  ins('Vacaciones de mitad',  'Receso escolar de junio y julio 2027',    30, DATE '2027-06-15', DATE '2027-07-31');
+  ins('Temporada baja',       'Agosto y septiembre 2027',                 0, DATE '2027-08-01', DATE '2027-10-04');
+  ins('Receso de octubre',    'Semana de receso escolar 2027',           15, DATE '2027-10-05', DATE '2027-10-18');
+  ins('Temporada baja',       'Octubre a diciembre 2027',                 0, DATE '2027-10-19', DATE '2027-12-14');
+  ins('Temporada decembrina', 'Navidad y fin de anio 2027',              45, DATE '2027-12-15', DATE '2027-12-31');
+  COMMIT;
+END;
+/
+
+-- ---------------------------------------------------------------------
+-- 2. Secuencias
+-- ---------------------------------------------------------------------
+CREATE SEQUENCE seq_auditoria_tarifa     START WITH 1 CACHE 20;
+CREATE SEQUENCE seq_auditoria_sentencia  START WITH 1 CACHE 20;
+CREATE SEQUENCE seq_liquidacion          START WITH 1 CACHE 20;
+
+-- ---------------------------------------------------------------------
+-- 3. AUDITORIA_TARIFA
+--    Una fila por tarifa afectada. id_sentencia agrupa las filas que
+--    cambio UNA misma sentencia (un UPDATE masivo = un id_sentencia).
+-- ---------------------------------------------------------------------
+CREATE TABLE auditoria_tarifa (
+  id_auditoria   NUMBER        DEFAULT seq_auditoria_tarifa.NEXTVAL,
+  id_sentencia   NUMBER        NOT NULL,
+  id_tarifa      NUMBER        NOT NULL,   -- sin FK: debe sobrevivir al DELETE
+  operacion      VARCHAR2(6)   NOT NULL,
+  usuario_bd     VARCHAR2(30)  NOT NULL,   -- quien: usuario de la sesion Oracle
+  usuario_app    VARCHAR2(64),             -- quien: usuario de la aplicacion
+  fecha_cambio   TIMESTAMP     DEFAULT SYSTIMESTAMP NOT NULL,   -- cuando
+  valor_anterior NUMBER(12,2),
+  valor_nuevo    NUMBER(12,2),
+  CONSTRAINT pk_auditoria_tarifa PRIMARY KEY (id_auditoria)
+             USING INDEX TABLESPACE ts_turismo_idx,
+  CONSTRAINT ck_audtar_operacion CHECK (operacion IN ('INSERT','UPDATE','DELETE'))
+) TABLESPACE ts_turismo_hist;
+
+CREATE INDEX ix_audtar_tarifa ON auditoria_tarifa (id_tarifa, fecha_cambio)
+  TABLESPACE ts_turismo_idx;
+
+COMMENT ON TABLE auditoria_tarifa IS 'Bitacora de cambios sobre TARIFA (trigger trg_tarifa_auditoria)';
+
+-- ---------------------------------------------------------------------
+-- 4. LIQUIDACION_MENSUAL
+--    Lo que la plataforma liquida a cada alojamiento por mes: estadias
+--    FINALIZADAS cuyo checkout cae en el mes, con sus servicios, menos la
+--    comision de la plataforma.
+-- ---------------------------------------------------------------------
+CREATE TABLE liquidacion_mensual (
+  id_liquidacion       NUMBER       DEFAULT seq_liquidacion.NEXTVAL,
+  id_alojamiento       NUMBER       NOT NULL,
+  anio                 NUMBER(4)    NOT NULL,
+  mes                  NUMBER(2)    NOT NULL,
+  num_reservas         NUMBER(6)    NOT NULL,
+  noches_vendidas      NUMBER(8)    NOT NULL,
+  ingreso_habitaciones NUMBER(16,2) NOT NULL,
+  ingreso_servicios    NUMBER(16,2) NOT NULL,
+  comision_plataforma  NUMBER(16,2) NOT NULL,
+  valor_neto           NUMBER(16,2) NOT NULL,
+  fecha_generacion     DATE         DEFAULT SYSDATE NOT NULL,
+  CONSTRAINT pk_liquidacion PRIMARY KEY (id_liquidacion)
+             USING INDEX TABLESPACE ts_turismo_idx,
+  CONSTRAINT fk_liq_alojamiento FOREIGN KEY (id_alojamiento)
+             REFERENCES alojamiento (id_alojamiento),
+  CONSTRAINT uq_liq_aloj_periodo UNIQUE (id_alojamiento, anio, mes)
+             USING INDEX TABLESPACE ts_turismo_idx,
+  CONSTRAINT ck_liq_mes   CHECK (mes BETWEEN 1 AND 12),
+  CONSTRAINT ck_liq_anio  CHECK (anio BETWEEN 2000 AND 2100),
+  CONSTRAINT ck_liq_valores CHECK (num_reservas >= 0 AND noches_vendidas >= 0
+                               AND ingreso_habitaciones >= 0 AND ingreso_servicios >= 0
+                               AND comision_plataforma >= 0
+                               AND valor_neto = ingreso_habitaciones + ingreso_servicios
+                                              - comision_plataforma)
+) TABLESPACE ts_turismo_hist;
+
+COMMENT ON TABLE liquidacion_mensual IS 'Liquidacion mensual por alojamiento (pkg_turismo.sp_liquidar_mes)';
+
+PROMPT Entrega 2: estructuras de apoyo creadas.
