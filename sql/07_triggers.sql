@@ -129,9 +129,10 @@ COMPOUND TRIGGER
   AFTER EACH ROW IS
     v_i PLS_INTEGER;
   BEGIN
-    -- Comparacion segura ante valores NULL usando DECODE
-    -- Si DECODE retorna 0 es porque los valores son IDENTICOS
-    IF INSERTING OR DELETING OR DECODE(:OLD.valor, :NEW.valor, 0, 1) = 1 THEN
+    IF INSERTING OR DELETING OR 
+       (:OLD.valor IS NULL AND :NEW.valor IS NOT NULL) OR
+       (:OLD.valor IS NOT NULL AND :NEW.valor IS NULL) OR
+       (:OLD.valor <> :NEW.valor) THEN
       v_i := g_aud.COUNT + 1;
       g_aud(v_i).id_sentencia   := g_sent;
       g_aud(v_i).id_tarifa      := NVL(:NEW.id_tarifa, :OLD.id_tarifa);
@@ -145,8 +146,6 @@ COMPOUND TRIGGER
 
   AFTER STATEMENT IS
   BEGIN
-    -- Insercion masiva directa desde la coleccion (Bulk Insert)
-    -- Mucho mas eficiente que iterar con un FOR LOOP fila por fila
     IF g_aud.COUNT > 0 THEN
       FORALL i IN 1 .. g_aud.COUNT
         INSERT INTO auditoria_tarifa
