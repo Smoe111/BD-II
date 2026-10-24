@@ -22,7 +22,12 @@
  
 ALTER SESSION SET CONTAINER = XEPDB1;
 ALTER SESSION SET CURRENT_SCHEMA = turismouq;
- 
+
+SET SERVEROUTPUT ON SIZE UNLIMITED
+
+-- =====================================================================
+-- nivel de FILA: impide reservas solapadas
+-- =====================================================================
 CREATE OR REPLACE TRIGGER trg_rh_no_solape
 FOR INSERT OR UPDATE OF id_habitacion, fecha_checkin, fecha_checkout
 ON reserva_habitacion
@@ -36,6 +41,11 @@ COMPOUND TRIGGER
   );
   TYPE t_filas IS TABLE OF t_fila INDEX BY PLS_INTEGER;
   g_filas t_filas;
+
+  BEFORE STATEMENT IS
+  BEGIN
+    g_filas.DELETE;
+  END BEFORE STATEMENT;
  
   -- ---------------------------------------------------------------
   -- Nivel de FILA: solo recolecta
@@ -99,20 +109,11 @@ COMPOUND TRIGGER
 END trg_rh_no_solape;
 /
 SHOW ERRORS
- 
---
--- EJECUTAR COMO: turismouq
--- =====================================================================
-ALTER SESSION SET CONTAINER = XEPDB1;
-ALTER SESSION SET CURRENT_SCHEMA = turismouq;
-
-SET SERVEROUTPUT ON SIZE UNLIMITED
-
 -- ---------------------------------------------------------------------
--- 1. Auditoria de TARIFA
+-- Auditoria de TARIFA: nivel de SENTENCIA: bitacora de cambios en TARIFA
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE TRIGGER trg_tarifa_auditoria
-  FOR INSERT OR UPDATE OF valor OR DELETE ON tarifa
+  FOR INSERT OR DELETE OR UPDATE OF valor ON tarifa
 COMPOUND TRIGGER
 
   TYPE t_aud IS TABLE OF auditoria_tarifa%ROWTYPE INDEX BY PLS_INTEGER;
@@ -128,8 +129,9 @@ COMPOUND TRIGGER
   AFTER EACH ROW IS
     v_i PLS_INTEGER;
   BEGIN
-    -- un UPDATE que deja el mismo valor no es un cambio
-    IF INSERTING OR DELETING OR :OLD.valor <> :NEW.valor THEN
+    -- Comparacion segura ante valores NULL usando DECODE
+    -- Si DECODE retorna 0 es porque los valores son IDENTICOS
+    IF INSERTING OR DELETING OR DECODE(:OLD.valor, :NEW.valor, 0, 1) = 1 THEN
       v_i := g_aud.COUNT + 1;
       g_aud(v_i).id_sentencia   := g_sent;
       g_aud(v_i).id_tarifa      := NVL(:NEW.id_tarifa, :OLD.id_tarifa);
@@ -143,15 +145,19 @@ COMPOUND TRIGGER
 
   AFTER STATEMENT IS
   BEGIN
-    FOR i IN 1 .. g_aud.COUNT LOOP
-      INSERT INTO auditoria_tarifa
-             (id_sentencia, id_tarifa, operacion, usuario_bd, usuario_app,
-              fecha_cambio, valor_anterior, valor_nuevo)
-      VALUES (g_aud(i).id_sentencia, g_aud(i).id_tarifa, g_aud(i).operacion,
-              SYS_CONTEXT('USERENV', 'SESSION_USER'),
-              SYS_CONTEXT('USERENV', 'CLIENT_INFO'),
-              SYSTIMESTAMP, g_aud(i).valor_anterior, g_aud(i).valor_nuevo);
-    END LOOP;
+    -- Insercion masiva directa desde la coleccion (Bulk Insert)
+    -- Mucho mas eficiente que iterar con un FOR LOOP fila por fila
+    IF g_aud.COUNT > 0 THEN
+      FORALL i IN 1 .. g_aud.COUNT
+        INSERT INTO auditoria_tarifa
+               (id_sentencia, id_tarifa, operacion, usuario_bd, usuario_app,
+                fecha_cambio, valor_anterior, valor_nuevo)
+        VALUES (g_aud(i).id_sentencia, g_aud(i).id_tarifa, g_aud(i).operacion,
+                SYS_CONTEXT('USERENV', 'SESSION_USER'),
+                SYS_CONTEXT('USERENV', 'CLIENT_INFO'),
+                SYSTIMESTAMP, g_aud(i).valor_anterior, g_aud(i).valor_nuevo);
+    END IF;
+
     g_aud.DELETE;
   END AFTER STATEMENT;
 
