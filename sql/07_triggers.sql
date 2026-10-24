@@ -18,6 +18,88 @@
 --    un UPDATE o un INSERT ... SELECT. La seccion AFTER EACH ROW solo
 --    anota (id_reserva, habitacion, fechas) y la verificacion se hace en
 --    AFTER STATEMENT, cuando la tabla ya no esta mutando.
+
+ 
+ALTER SESSION SET CONTAINER = XEPDB1;
+ALTER SESSION SET CURRENT_SCHEMA = turismouq;
+ 
+CREATE OR REPLACE TRIGGER trg_rh_no_solape
+FOR INSERT OR UPDATE OF id_habitacion, fecha_checkin, fecha_checkout
+ON reserva_habitacion
+COMPOUND TRIGGER
+ 
+  TYPE t_fila IS RECORD (
+    id_reserva     reserva_habitacion.id_reserva%TYPE,
+    id_habitacion  reserva_habitacion.id_habitacion%TYPE,
+    fecha_checkin  reserva_habitacion.fecha_checkin%TYPE,
+    fecha_checkout reserva_habitacion.fecha_checkout%TYPE
+  );
+  TYPE t_filas IS TABLE OF t_fila INDEX BY PLS_INTEGER;
+  g_filas t_filas;
+ 
+  -- ---------------------------------------------------------------
+  -- Nivel de FILA: solo recolecta
+  -- ---------------------------------------------------------------
+  AFTER EACH ROW IS
+    v_i PLS_INTEGER := g_filas.COUNT + 1;
+  BEGIN
+    g_filas(v_i).id_reserva     := :NEW.id_reserva;
+    g_filas(v_i).id_habitacion  := :NEW.id_habitacion;
+    g_filas(v_i).fecha_checkin  := :NEW.fecha_checkin;
+    g_filas(v_i).fecha_checkout := :NEW.fecha_checkout;
+  END AFTER EACH ROW;
+ 
+  -- ---------------------------------------------------------------
+  -- Fin de la sentencia: verifica
+  -- ---------------------------------------------------------------
+  AFTER STATEMENT IS
+    v_fila   t_fila;
+    v_numero habitacion.numero_habitacion%TYPE;
+    v_choque reserva_habitacion.id_reserva%TYPE;
+  BEGIN
+    FOR i IN 1 .. g_filas.COUNT LOOP
+      v_fila := g_filas(i);
+ 
+      -- Bloquea la habitacion; despues de obtener el bloqueo la consulta
+      -- siguiente ya ve lo que otras sesiones hayan confirmado.
+      SELECT numero_habitacion
+        INTO v_numero
+        FROM habitacion
+       WHERE id_habitacion = v_fila.id_habitacion
+         FOR UPDATE WAIT 10;
+ 
+      -- Busca otra reserva ACTIVA de la misma habitacion que se cruce,
+      -- siempre que la reserva de la fila nueva tambien este activa.
+      SELECT MIN(rh.id_reserva)
+        INTO v_choque
+        FROM reserva_habitacion rh
+        JOIN reserva r ON r.id_reserva = rh.id_reserva
+       WHERE rh.id_habitacion = v_fila.id_habitacion
+         AND rh.id_reserva   <> v_fila.id_reserva
+         AND r.estado        <> 'CANCELADA'
+         AND rh.fecha_checkin  < v_fila.fecha_checkout
+         AND v_fila.fecha_checkin < rh.fecha_checkout
+         AND EXISTS (SELECT 1
+                       FROM reserva p
+                      WHERE p.id_reserva = v_fila.id_reserva
+                        AND p.estado    <> 'CANCELADA');
+ 
+      IF v_choque IS NOT NULL THEN
+        RAISE_APPLICATION_ERROR(-20003,
+          'La habitacion ' || v_numero || ' ya tiene la reserva activa '
+          || v_choque || ' que se cruza con las fechas '
+          || TO_CHAR(v_fila.fecha_checkin,  'YYYY-MM-DD') || ' a '
+          || TO_CHAR(v_fila.fecha_checkout, 'YYYY-MM-DD'));
+      END IF;
+    END LOOP;
+ 
+    g_filas.DELETE;
+  END AFTER STATEMENT;
+ 
+END trg_rh_no_solape;
+/
+SHOW ERRORS
+ 
 --
 -- EJECUTAR COMO: turismouq
 -- =====================================================================
