@@ -47,8 +47,17 @@ CREATE OR REPLACE PACKAGE pkg_turismo AS
                              p_mes            IN NUMBER,
                              p_id_alojamiento IN NUMBER DEFAULT NULL);
 
+  PROCEDURE sp_crear_reserva (p_id_cliente         IN  NUMBER,
+                              p_id_usuario_sistema IN  NUMBER,
+                              p_checkin            IN  DATE,
+                              p_checkout           IN  DATE,
+                              p_num_huespedes      IN  NUMBER,
+                              p_habitaciones       IN  VARCHAR2,
+                              p_id_reserva         OUT NUMBER);
+
 END pkg_turismo;
 /
+
 
 -- =====================================================================
 -- 2. Cuerpo
@@ -354,6 +363,254 @@ CREATE OR REPLACE PACKAGE BODY pkg_turismo AS
     DBMS_OUTPUT.PUT_LINE('Alojamientos liquidados: ' || v_procesados ||
                          ' - con error: ' || v_fallidos);
   END sp_liquidar_mes;
+
+  -- -------------------------------------------------------------------
+  -- sp_crear_reserva
+  -- -------------------------------------------------------------------
+  PROCEDURE sp_crear_reserva (p_id_cliente         IN  NUMBER,
+                              p_id_usuario_sistema IN  NUMBER,
+                              p_checkin            IN  DATE,
+                              p_checkout           IN  DATE,
+                              p_num_huespedes      IN  NUMBER,
+                              p_habitaciones       IN  VARCHAR2,
+                              p_id_reserva         OUT NUMBER)
+  IS
+    TYPE t_n IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
+ 
+    v_ids        t_n;       -- habitaciones pedidas, ordenadas por id
+    v_valor      t_n;       -- valor de la estadia por habitacion
+    v_previo     t_n;       -- noches x tarifa base por habitacion
+ 
+    v_checkin    DATE := TRUNC(p_checkin);
+    v_checkout   DATE := TRUNC(p_checkout);
+    v_noches     PLS_INTEGER;
+ 
+    v_existe     NUMBER;
+    v_rol        usuario_sistema.rol%TYPE;
+    v_activo_u   usuario_sistema.activo%TYPE;
+    v_cli_cuenta usuario_sistema.id_cliente%TYPE;
+ 
+    v_aloj       habitacion.id_alojamiento%TYPE;
+    v_aloj_ref   habitacion.id_alojamiento%TYPE;
+    v_act_hab    habitacion.activo%TYPE;
+    v_act_aloj   alojamiento.activo%TYPE;
+    v_numero     habitacion.numero_habitacion%TYPE;
+    v_cap        tipo_habitacion.capacidad_maxima%TYPE;
+    v_tarifa     tarifa.valor%TYPE;
+    v_cap_total  NUMBER := 0;
+    v_total      NUMBER := 0;
+  BEGIN
+    p_id_reserva := NULL;
+ 
+    -- ----- 1. Fechas ----------------------------------------------------
+    IF v_checkin IS NULL OR v_checkout IS NULL THEN
+      RAISE_APPLICATION_ERROR(-20040,
+        'Las fechas de check-in y check-out son obligatorias.');
+    END IF;
+    IF v_checkout <= v_checkin THEN
+      RAISE_APPLICATION_ERROR(-20040,
+        'El check-out (' || TO_CHAR(v_checkout, 'YYYY-MM-DD') ||
+        ') debe ser posterior al check-in (' ||
+        TO_CHAR(v_checkin, 'YYYY-MM-DD') || ').');
+    END IF;
+    -- Misma regla que ck_reserva_anticipo, pero con un mensaje legible
+    -- en vez de ORA-02290.
+    IF v_checkin < TRUNC(SYSDATE) THEN
+      RAISE_APPLICATION_ERROR(-20040,
+        'No se puede reservar con check-in en el pasado (' ||
+        TO_CHAR(v_checkin, 'YYYY-MM-DD') || ').');
+    END IF;
+    v_noches := v_checkout - v_checkin;
+ 
+    -- ----- 2. Cliente ---------------------------------------------------
+    SELECT COUNT(*) INTO v_existe
+      FROM cliente
+     WHERE id_cliente = p_id_cliente;
+    IF v_existe = 0 THEN
+      RAISE_APPLICATION_ERROR(-20041,
+        'El cliente ' || NVL(TO_CHAR(p_id_cliente), 'NULL') || ' no existe.');
+    END IF;
+ 
+    -- ----- 3. Usuario que registra --------------------------------------
+    BEGIN
+      SELECT rol, activo, id_cliente
+        INTO v_rol, v_activo_u, v_cli_cuenta
+        FROM usuario_sistema
+       WHERE id_usuario_sistema = p_id_usuario_sistema;
+    EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+        RAISE_APPLICATION_ERROR(-20042,
+          'El usuario ' || NVL(TO_CHAR(p_id_usuario_sistema), 'NULL') ||
+          ' no existe.');
+    END;
+    IF v_activo_u <> 'S' THEN
+      RAISE_APPLICATION_ERROR(-20042,
+        'El usuario ' || p_id_usuario_sistema || ' esta inactivo.');
+    END IF;
+    -- Un cliente solo puede reservar a su propio nombre; el personal
+    -- (recepcion, admin) reserva a nombre de cualquier cliente.
+    IF v_rol = 'CLIENTE' AND v_cli_cuenta <> p_id_cliente THEN
+      RAISE_APPLICATION_ERROR(-20042,
+        'La cuenta ' || p_id_usuario_sistema ||
+        ' pertenece a otro cliente y no puede reservar por el cliente ' ||
+        p_id_cliente || '.');
+    END IF;
+ 
+    -- ----- 4. Huespedes -------------------------------------------------
+    IF p_num_huespedes IS NULL OR p_num_huespedes <> TRUNC(p_num_huespedes)
+       OR p_num_huespedes NOT BETWEEN 1 AND 60 THEN
+      RAISE_APPLICATION_ERROR(-20043,
+        'Numero de huespedes invalido (' ||
+        NVL(TO_CHAR(p_num_huespedes), 'NULL') || '): debe estar entre 1 y 60.');
+    END IF;
+ 
+    -- ----- 5. Lista de habitaciones -------------------------------------
+    -- Ordenada por id: las filas se bloquean siempre en el mismo orden y
+    -- dos reservas concurrentes sobre las mismas habitaciones no pueden
+    -- quedar en deadlock.
+    BEGIN
+      SELECT TO_NUMBER(TRIM(REGEXP_SUBSTR(p_habitaciones, '[^,]+', 1, LEVEL)))
+        BULK COLLECT INTO v_ids
+        FROM dual
+     CONNECT BY REGEXP_SUBSTR(p_habitaciones, '[^,]+', 1, LEVEL) IS NOT NULL
+       ORDER BY 1;
+    EXCEPTION
+      WHEN INVALID_NUMBER OR VALUE_ERROR THEN
+        RAISE_APPLICATION_ERROR(-20044,
+          'Lista de habitaciones mal formada: ' || p_habitaciones ||
+          ' (se esperan ids separados por coma, ej. 12,13).');
+    END;
+ 
+    IF v_ids.COUNT = 0 THEN
+      RAISE_APPLICATION_ERROR(-20044,
+        'Debe indicar al menos una habitacion.');
+    END IF;
+ 
+    -- Todo lo que sigue toca datos: si algo falla, se deshace y se
+    -- liberan los bloqueos de las habitaciones.
+    SAVEPOINT sp_crear_reserva;
+ 
+    BEGIN
+      FOR i IN 1 .. v_ids.COUNT LOOP
+ 
+        IF v_ids(i) <> TRUNC(v_ids(i)) THEN
+          RAISE_APPLICATION_ERROR(-20044,
+            'Id de habitacion invalido: ' || v_ids(i));
+        END IF;
+        IF i > 1 AND v_ids(i) = v_ids(i - 1) THEN
+          RAISE_APPLICATION_ERROR(-20044,
+            'La habitacion ' || v_ids(i) || ' esta repetida en la lista.');
+        END IF;
+ 
+        -- --- 6. Existencia, capacidad y tarifa, bloqueando la fila ----
+        -- FOR UPDATE serializa a quienes reservan la misma habitacion:
+        -- el segundo espera a que el primero confirme y entonces ve la
+        -- reserva ya creada en la verificacion de disponibilidad. Sin el
+        -- bloqueo, dos sesiones podrian pasar la verificacion a la vez y
+        -- guardar la misma noche dos veces.
+        BEGIN
+          SELECT h.id_alojamiento, h.activo, a.activo,
+                 h.numero_habitacion, th.capacidad_maxima, tf.valor
+            INTO v_aloj, v_act_hab, v_act_aloj,
+                 v_numero, v_cap, v_tarifa
+            FROM habitacion h
+            JOIN alojamiento a      ON a.id_alojamiento      = h.id_alojamiento
+            JOIN tipo_habitacion th ON th.id_tipo_habitacion = h.id_tipo_habitacion
+            JOIN tarifa tf          ON tf.id_tarifa          = h.id_tarifa
+           WHERE h.id_habitacion = v_ids(i)
+             FOR UPDATE OF h.id_habitacion;
+        EXCEPTION
+          WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20044,
+              'La habitacion ' || v_ids(i) || ' no existe.');
+        END;
+ 
+        IF v_act_hab <> 'S' THEN
+          RAISE_APPLICATION_ERROR(-20044,
+            'La habitacion ' || v_ids(i) || ' (No. ' || v_numero ||
+            ') esta inactiva.');
+        END IF;
+        IF v_act_aloj <> 'S' THEN
+          RAISE_APPLICATION_ERROR(-20045,
+            'El alojamiento de la habitacion ' || v_ids(i) || ' esta inactivo.');
+        END IF;
+ 
+        -- --- Un solo alojamiento por reserva --------------------------
+        -- La liquidacion (sp_liquidar_mes) y la consulta 8 asumen que una
+        -- reserva no mezcla alojamientos; aqui se garantiza.
+        IF i = 1 THEN
+          v_aloj_ref := v_aloj;
+        ELSIF v_aloj <> v_aloj_ref THEN
+          RAISE_APPLICATION_ERROR(-20045,
+            'Las habitaciones de una reserva deben ser del mismo alojamiento ' ||
+            '(la ' || v_ids(i) || ' es de otro).');
+        END IF;
+ 
+        v_cap_total := v_cap_total + v_cap;
+ 
+        -- --- 7. Disponibilidad ----------------------------------------
+        -- Las CANCELADAS no bloquean. Solape de rangos semiabiertos
+        -- [checkin, checkout): la noche del checkout queda libre para
+        -- el huesped que llega ese mismo dia.
+        SELECT COUNT(*) INTO v_existe
+          FROM reserva_habitacion rh
+          JOIN reserva r ON r.id_reserva = rh.id_reserva
+         WHERE rh.id_habitacion = v_ids(i)
+           AND r.estado        <> 'CANCELADA'
+           AND rh.fecha_checkin  < v_checkout
+           AND rh.fecha_checkout > v_checkin;
+        IF v_existe > 0 THEN
+          RAISE_APPLICATION_ERROR(-20047,
+            'La habitacion ' || v_ids(i) || ' (No. ' || v_numero ||
+            ') no esta disponible entre ' || TO_CHAR(v_checkin, 'YYYY-MM-DD') ||
+            ' y ' || TO_CHAR(v_checkout, 'YYYY-MM-DD') || '.');
+        END IF;
+ 
+        -- --- 8. Valor: noche por noche, con la temporada de cada una --
+        -- Si falta una temporada, fn_valor_estadia levanta -20022 y se
+        -- propaga: mejor no reservar que cobrar una noche en cero.
+        v_valor(i)  := fn_valor_estadia(v_ids(i), v_checkin, v_checkout);
+        v_previo(i) := v_noches * v_tarifa;     -- sin ajuste de temporada
+        v_total     := v_total + v_valor(i);
+      END LOOP;
+ 
+      -- Capacidad total de las habitaciones pedidas (la suma, no una por
+      -- una: 5 personas pueden repartirse en dos dobles y una sencilla).
+      IF p_num_huespedes > v_cap_total THEN
+        RAISE_APPLICATION_ERROR(-20046,
+          'Capacidad superada: ' || p_num_huespedes || ' huespedes para ' ||
+          'habitaciones con capacidad total de ' || v_cap_total || '.');
+      END IF;
+ 
+      -- ----- 9. Insercion: cabecera y detalle ---------------------------
+      -- fecha_creacion toma SYSDATE; estado nace PENDIENTE y sin pagos.
+      -- Los valores quedan como FOTO del momento de la reserva.
+      INSERT INTO reserva (id_cliente, id_usuario_sistema, fecha_checkin,
+                           fecha_checkout, estado, num_huespedes,
+                           valor_total, valor_pagado)
+      VALUES (p_id_cliente, p_id_usuario_sistema, v_checkin,
+              v_checkout, 'PENDIENTE', p_num_huespedes,
+              v_total, 0)
+      RETURNING id_reserva INTO p_id_reserva;
+ 
+      FOR i IN 1 .. v_ids.COUNT LOOP
+        INSERT INTO reserva_habitacion (id_reserva, id_habitacion,
+                                        fecha_checkin, fecha_checkout,
+                                        valor_previo, valor_reserva)
+        VALUES (p_id_reserva, v_ids(i), v_checkin, v_checkout,
+                v_previo(i), v_valor(i));
+      END LOOP;
+ 
+      COMMIT;
+ 
+    EXCEPTION
+      WHEN OTHERS THEN
+        ROLLBACK TO sp_crear_reserva;
+        p_id_reserva := NULL;
+        RAISE;      -- el error original (-200xx u ORA-) llega intacto al llamador
+    END;
+  END sp_crear_reserva;
+ 
 
 END pkg_turismo;
 /
