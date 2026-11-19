@@ -1,0 +1,56 @@
+<section class="pagina">
+  <header class="encabezado">
+    <div>
+      <span class="antetitulo">Destinos</span>
+      <h1>{{ nombreMunicipio() }}</h1>
+      <p>Doce municipios, del valle de Cocora a los miradores de Filandia. Elija uno para ver sus alojamientos.</p>
+    </div>
+  </header>
+
+  <nav class="municipios" aria-label="Municipios">
+    <button type="button" [class.activo]="!idMunicipio()" (click)="filtrar({ municipio: null })">
+      <strong>Todos</strong><small>Quindío</small>
+    </button>
+    @for (m of municipios(); track m.idMunicipio) {
+      <button type="button" [class.activo]="idMunicipio() === m.idMunicipio" (click)="filtrar({ municipio: m.idMunicipio })">
+        <strong>{{ m.nombre }}</strong><small>{{ m.alojamientos }} alojamientos</small>
+      </button>
+    }
+  </nav>
+
+  <div class="pestanas" role="tablist" aria-label="Tipo de alojamiento">
+    <button type="button" role="tab" [class.activa]="!idTipo()" [attr.aria-selected]="!idTipo()" (click)="filtrar({ tipo: null })">Todos</button>
+    @for (t of tipos(); track t.idTipoAlojamiento) {
+      <button type="button" role="tab" [class.activa]="idTipo() === t.idTipoAlojamiento" [attr.aria-selected]="idTipo() === t.idTipoAlojamiento"
+              (click)="filtrar({ tipo: t.idTipoAlojamiento })">{{ t.nombre }}</button>
+    }
+  </div>
+
+  @if (alojamientos.cargando()) { <app-cargando [filas]="6" /> }
+  @else if (alojamientos.error(); as e) { <app-aviso [error]="e" /> }
+  @else if (alojamientos.datos()?.length) {
+    <div class="tarjetas">
+      @for (a of alojamientos.datos(); track a.idAlojamiento) {
+        <a class="alojamiento" [routerLink]="['/destinos', a.idAlojamiento]" [class.inactivo]="a.activo !== 'S'">
+          <div class="foto" [attr.data-tipo]="a.tipoAlojamiento">
+            <span class="material-symbols-rounded" aria-hidden="true">{{ icono(a.tipoAlojamiento) }}</span>
+            <span class="tipo">{{ a.tipoAlojamiento }}</span>
+          </div>
+          <div class="texto">
+            <h3>{{ a.nombre }}</h3>
+            <p><span class="material-symbols-rounded" aria-hidden="true">location_on</span>{{ a.municipio }} · {{ a.direccion }}</p>
+            <div class="pie">
+              <span class="estrellas" [attr.aria-label]="a.calificacion + ' estrellas'">
+                @for (e of estrellas(a.calificacion); track $index) { <span class="material-symbols-rounded" aria-hidden="true">star</span> }
+              </span>
+              <span class="muted">{{ a.habitaciones }} habitaciones</span>
+            </div>
+            @if (a.activo !== 'S') { <span class="etiqueta error">Inactivo</span> }
+          </div>
+        </a>
+      }
+    </div>
+  } @else {
+    <app-vacio icono="holiday_village" titulo="No hay alojamientos con esos filtros" />
+  }
+</section>

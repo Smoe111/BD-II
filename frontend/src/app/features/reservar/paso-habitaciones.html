@@ -1,0 +1,82 @@
+<form class="tarjeta busqueda" [formGroup]="form" (ngSubmit)="buscar()">
+  <label class="campo">
+    <span>Llegada</span>
+    <input class="control" type="date" formControlName="checkin" [min]="hoy" />
+  </label>
+  <label class="campo">
+    <span>Salida</span>
+    <input class="control" type="date" formControlName="checkout" [min]="form.controls.checkin.value" />
+  </label>
+  <label class="campo huespedes">
+    <span>Huéspedes</span>
+    <input class="control" type="number" formControlName="huespedes" min="1" max="60" />
+  </label>
+  <label class="campo">
+    <span>Municipio</span>
+    <select class="control" formControlName="municipio">
+      <option [ngValue]="0">Todo el Quindío</option>
+      @for (m of municipios(); track m.idMunicipio) {
+        <option [ngValue]="m.idMunicipio">{{ m.nombre }}</option>
+      }
+    </select>
+  </label>
+  <button class="boton" type="submit" [disabled]="disponibles.cargando()">
+    <span class="material-symbols-rounded" aria-hidden="true">search</span>Buscar
+  </button>
+  @if (form.hasError('rango') && form.touched) {
+    <small class="error-rango">La fecha de salida debe ser posterior a la de llegada.</small>
+  }
+</form>
+
+@if (disponibles.cargando()) {
+  <app-cargando [filas]="6" />
+} @else if (disponibles.error(); as error) {
+  <app-aviso [error]="error" />
+} @else if (disponibles.datos()) {
+  @if (grupos().length) {
+    <p class="conteo">
+      <strong>{{ disponibles.datos()!.length }}</strong> habitaciones libres en <strong>{{ grupos().length }}</strong>
+      alojamientos para {{ noches() }} {{ noches() === 1 ? 'noche' : 'noches' }}.
+      Puede elegir varias habitaciones del mismo alojamiento.
+    </p>
+    <div class="alojamientos">
+      @for (g of grupos(); track g.idAlojamiento) {
+        <article class="alojamiento" [class.elegido]="borrador.alojamiento() === g.alojamiento">
+          <header>
+            <div>
+              <h3>{{ g.alojamiento }}</h3>
+              <p><span class="material-symbols-rounded" aria-hidden="true">location_on</span>{{ g.municipio }}, Quindío</p>
+            </div>
+            <span class="etiqueta">{{ g.habitaciones.length }} libres</span>
+          </header>
+          <ul>
+            @for (h of g.habitaciones; track h.idHabitacion) {
+              <li>
+                <button type="button" class="habitacion" [class.activa]="seleccionada(h)"
+                        [attr.aria-pressed]="seleccionada(h)" (click)="borrador.alternarHabitacion(h)">
+                  <span class="check material-symbols-rounded" aria-hidden="true">
+                    {{ seleccionada(h) ? 'check_circle' : 'radio_button_unchecked' }}
+                  </span>
+                  <span class="info">
+                    <strong>{{ h.tipoHabitacion }} · N.º {{ h.numeroHabitacion }}</strong>
+                    <small>
+                      <span class="material-symbols-rounded" aria-hidden="true">group</span>hasta {{ h.capacidadMaxima }}
+                      · {{ h.valorNoche | pesos }} noche base
+                    </small>
+                  </span>
+                  <span class="precio">
+                    <strong class="num">{{ h.valorEstadia | pesos }}</strong>
+                    <small>estadía con temporada</small>
+                  </span>
+                </button>
+              </li>
+            }
+          </ul>
+        </article>
+      }
+    </div>
+  } @else {
+    <app-vacio icono="bed" titulo="No hay habitaciones libres"
+               texto="Pruebe con otras fechas o con todo el Quindío. Si las noches no tienen temporada definida, la tarifa no se puede calcular." />
+  }
+}

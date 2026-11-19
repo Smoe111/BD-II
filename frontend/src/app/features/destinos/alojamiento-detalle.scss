@@ -1,0 +1,22 @@
+.volver { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; text-decoration: none; font-size: 0.88rem; width: fit-content; }
+.cuerpo { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr) 380px; align-items: start; }
+tr.sel td { background: var(--verde-50); }
+.cotizador { position: sticky; top: 84px; display: grid; gap: 12px; }
+.fechas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hab { font-size: 0.85rem; font-weight: 600; color: var(--verde-700); }
+.tramos {
+  list-style: none; margin: 0; padding: 0; display: grid; gap: 12px;
+  li { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--radio-s); background: var(--crema-100); }
+  .fila { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  small { color: var(--cafe-600); font-size: 0.78rem; }
+  .barra { height: 6px; border-radius: 999px; background: var(--crema-200); span { display: block; height: 100%; border-radius: 999px; background: var(--serie-1); } }
+  .subtotal { justify-self: end; font-weight: 700; font-size: 0.9rem; }
+}
+.totales {
+  margin: 0; display: grid; gap: 6px;
+  div { display: flex; justify-content: space-between; gap: 8px; font-size: 0.86rem; color: var(--cafe-600); }
+  dd { margin: 0; }
+  .final { padding-top: 10px; border-top: 1px dashed var(--crema-300); color: var(--cafe-900); font-weight: 600;
+    dd { font-family: var(--fuente-titulo); font-size: 1.4rem; color: var(--verde-700); } }
+}
+@media (max-width: 1100px) { .cuerpo { grid-template-columns: 1fr; } .cotizador { position: static; } }

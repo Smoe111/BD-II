@@ -1,0 +1,109 @@
+<section class="tarjeta">
+  <header>
+    <div>
+      <h2>Experiencias del paisaje cafetero</h2>
+      <p>
+        Opcionales. Se agendan el día de llegada y llevan el recargo de esa temporada
+        (+{{ borrador.pctTemporadaLlegada() }} %).
+      </p>
+    </div>
+  </header>
+
+  @for (grupo of tipos(); track grupo.tipo) {
+    <h3 class="tipo">{{ grupo.tipo }}</h3>
+    <ul class="servicios">
+      @for (s of grupo.servicios; track s.idServicio) {
+        <li [class.activo]="borrador.cantidadDe(s.idServicio) > 0">
+          <div class="nombre">
+            <strong>{{ s.nombre }}</strong>
+            <small class="num">{{ s.valorServicio | pesos }} c/u · cód. {{ s.idServicio }}</small>
+          </div>
+          <div class="contador" role="group" [attr.aria-label]="'Cantidad de ' + s.nombre">
+            <button type="button" (click)="cambiar(s, -1)" [disabled]="!borrador.cantidadDe(s.idServicio)" aria-label="Quitar uno">
+              <span class="material-symbols-rounded" aria-hidden="true">remove</span>
+            </button>
+            <output class="num">{{ borrador.cantidadDe(s.idServicio) }}</output>
+            <button type="button" (click)="cambiar(s, 1)" aria-label="Agregar uno">
+              <span class="material-symbols-rounded" aria-hidden="true">add</span>
+            </button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+
+  <details class="avanzado">
+    <summary>Agregar servicio por código</summary>
+    <p>
+      Si el código no existe, el procedimiento hace <code>ROLLBACK TO sp_servicios</code>: la reserva y el pago
+      se guardan, pero sin servicios (resultado ROLLBACK_PARCIAL).
+    </p>
+    <form (ngSubmit)="agregarPorCodigo()">
+      <input class="control" type="number" min="1" name="codigo" [(ngModel)]="codigo" placeholder="Ej.: 999" />
+      <button class="boton suave" type="submit">Agregar</button>
+    </form>
+    @for (l of porCodigo(); track l.idServicio) {
+      <span class="etiqueta aviso">
+        <span class="material-symbols-rounded" aria-hidden="true">warning</span>Cód. {{ l.idServicio }} × {{ l.cantidad }} (no está en el catálogo)
+        <button type="button" class="quitar" (click)="borrador.ponerServicio(undefined, l.idServicio, 0)" aria-label="Quitar">×</button>
+      </span>
+    }
+  </details>
+</section>
+
+<section class="tarjeta">
+  <header>
+    <div>
+      <h2>Pago</h2>
+      <p>Con pago, la reserva queda confirmada en una sola transacción. Sin pago, queda pendiente.</p>
+    </div>
+  </header>
+
+  <div class="modo" role="radiogroup" aria-label="Modalidad">
+    <label [class.activo]="borrador.conPago()">
+      <input type="radio" name="modo" [checked]="borrador.conPago()" (change)="borrador.conPago.set(true)" />
+      <span class="material-symbols-rounded" aria-hidden="true">payments</span>
+      <span><strong>Reservar y pagar</strong><small>sp_reservar_y_pagar · queda CONFIRMADA</small></span>
+    </label>
+    <label [class.activo]="!borrador.conPago()">
+      <input type="radio" name="modo" [checked]="!borrador.conPago()" (change)="borrador.conPago.set(false)" />
+      <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
+      <span><strong>Solo reservar</strong><small>sp_crear_reserva · queda PENDIENTE</small></span>
+    </label>
+  </div>
+
+  @if (borrador.conPago()) {
+    <div class="pago">
+      <label class="campo">
+        <span>Método</span>
+        <select class="control" [ngModel]="borrador.metodoPago()" (ngModelChange)="borrador.metodoPago.set($event)" name="metodo">
+          @for (m of metodos; track m) { <option [value]="m">{{ nombreMetodo[m] }}</option> }
+        </select>
+      </label>
+      <label class="campo">
+        <span>Valor a pagar ahora</span>
+        <input class="control num" type="number" min="1" step="1000" name="valor"
+               [ngModel]="borrador.valorPago()" (ngModelChange)="borrador.valorPago.set($event)" />
+        <small [class.error]="(borrador.valorPago() ?? 0) < borrador.anticipoMinimo()">
+          Anticipo mínimo ({{ pct }} %): {{ borrador.anticipoMinimo() | pesos }}
+        </small>
+      </label>
+      <div class="sugerencias">
+        <button type="button" class="boton suave pequeno" (click)="sugerir(0.3)">30 %</button>
+        <button type="button" class="boton suave pequeno" (click)="sugerir(0.5)">50 %</button>
+        <button type="button" class="boton suave pequeno" (click)="borrador.valorPago.set(borrador.total())">Total</button>
+      </div>
+    </div>
+    @if (borrador.servicios().length) {
+      <p class="nota">
+        <span class="material-symbols-rounded" aria-hidden="true">info</span>
+        Los servicios entran en la transacción con pago. En "Solo reservar" no se agregan.
+      </p>
+    }
+  } @else if (borrador.servicios().length) {
+    <p class="nota aviso">
+      <span class="material-symbols-rounded" aria-hidden="true">warning</span>
+      sp_crear_reserva solo registra habitaciones: los servicios elegidos no se guardarán.
+    </p>
+  }
+</section>

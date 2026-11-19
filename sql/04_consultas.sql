@@ -134,7 +134,11 @@ WITH ingresos_alojamiento AS (
         RANK() OVER (
             PARTITION BY m.id_municipio
             ORDER BY SUM(rh.valor_reserva) DESC
-        ) AS ranking
+        ) AS ranking,
+        -- Total del municipio: suma de los totales de sus alojamientos
+        SUM(SUM(rh.valor_reserva)) OVER (
+            PARTITION BY m.id_municipio
+        ) AS total_municipio
     FROM municipio m
     JOIN alojamiento a         ON m.id_municipio = a.id_municipio
     JOIN habitacion h          ON a.id_alojamiento = h.id_alojamiento
@@ -197,13 +201,11 @@ SELECT DISTINCT
     r.fecha_checkin,
     r.fecha_checkout,
     -- Reservas canceladas: no se calcula el valor total
-    CASE WHEN r.estado = 'CANCELADA' THEN - 
+    CASE WHEN r.estado = 'CANCELADA' THEN 0
          ELSE r.valor_total
     END AS valor_total,
-    -- Reservas canceladas se muestran simplemente como FINALIZADA
-    CASE WHEN r.estado = 'CANCELADA' THEN 'FINALIZADA'
-         ELSE r.estado
-    END AS estado
+    -- Estado real de la reserva (las canceladas aparecen como CANCELADA)
+    r.estado
 FROM reserva r
 JOIN usuario_sistema u     ON r.id_usuario_sistema = u.id_usuario_sistema
 JOIN cliente c              ON r.id_cliente = c.id_cliente

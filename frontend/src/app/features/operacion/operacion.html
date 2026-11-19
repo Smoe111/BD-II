@@ -1,0 +1,86 @@
+<section class="pagina">
+  <header class="encabezado">
+    <div>
+      <span class="antetitulo">Operación del día</span>
+      <h1>{{ fecha() | fecha: 'larga' }}</h1>
+      <p>Llegadas, cierre de caja y agenda de experiencias. Son las consultas que se aceleraron con índices en la Entrega 3.</p>
+    </div>
+    <div class="dia">
+      <button class="boton suave icono" type="button" (click)="mover(-1)" aria-label="Día anterior">
+        <span class="material-symbols-rounded" aria-hidden="true">chevron_left</span>
+      </button>
+      <input class="control" type="date" [ngModel]="fecha()" (ngModelChange)="fecha.set($event)" aria-label="Fecha" />
+      <button class="boton suave icono" type="button" (click)="mover(1)" aria-label="Día siguiente">
+        <span class="material-symbols-rounded" aria-hidden="true">chevron_right</span>
+      </button>
+    </div>
+  </header>
+
+  <article class="tarjeta">
+    <header>
+      <div>
+        <h2>Llegadas</h2>
+        <p>Reservas CONFIRMADAS con check-in en la fecha · índice compuesto <code>ix_reserva_estado_checkin</code></p>
+      </div>
+      @if (llegadas.datos()?.length) {
+        <div class="resumen">
+          <span class="etiqueta info">{{ llegadas.datos()!.length }} reservas</span>
+          <span class="etiqueta">{{ huespedes() }} huéspedes</span>
+          <span class="etiqueta aviso">Por cobrar {{ porCobrar() | pesos }}</span>
+        </div>
+      }
+    </header>
+    @if (llegadas.cargando()) { <app-cargando [filas]="5" /> }
+    @else if (llegadas.error(); as e) { <app-aviso [error]="e" /> }
+    @else if (llegadas.datos()?.length) {
+      <div class="tabla-contenedor tabla-alta">
+        <table class="tabla">
+          <thead><tr><th>Reserva</th><th>Huésped</th><th>Teléfono</th><th class="der">Huéspedes</th><th>Salida</th><th class="der">Saldo</th></tr></thead>
+          <tbody>
+            @for (l of llegadas.datos(); track l.idReserva) {
+              <tr>
+                <td><a [routerLink]="['/reservas', l.idReserva]">#{{ l.idReserva }}</a></td>
+                <td>{{ l.nombres }} {{ l.apellidos }}</td>
+                <td>{{ l.telefono ?? '—' }}</td>
+                <td class="der">{{ l.numHuespedes }}</td>
+                <td>{{ l.fechaCheckout | fecha }}</td>
+                <td class="der">
+                  @if (l.valorPendiente > 0) { <span class="etiqueta aviso">{{ l.valorPendiente | pesos }}</span> }
+                  @else { <span class="etiqueta ok">Pagada</span> }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <app-vacio icono="luggage" titulo="Sin llegadas confirmadas" texto="Pruebe con otra fecha, por ejemplo una de temporada decembrina." />
+    }
+  </article>
+
+  <div class="rejilla-2">
+    <article class="tarjeta">
+      <header>
+        <div><h2>Cierre de caja</h2><p>Pagos APROBADOS del día · índice basado en función <code>TRUNC(fecha_pago)</code></p></div>
+        <strong class="total num">{{ totalCaja() | pesos }}</strong>
+      </header>
+      @if (caja.cargando()) { <app-cargando /> }
+      @else if (caja.error(); as e) { <app-aviso [error]="e" /> }
+      @else if (barrasCaja().length) { <app-barras-horizontales [puntos]="barrasCaja()" [formato]="formato" /> }
+      @else { <app-vacio icono="point_of_sale" titulo="Sin pagos ese día" /> }
+    </article>
+
+    <article class="tarjeta">
+      <header><div><h2>Agenda de experiencias</h2><p>Servicios del día · índice que cubre la consulta <code>ix_rs_fecha_servicio</code></p></div></header>
+      @if (agenda.cargando()) { <app-cargando /> }
+      @else if (agenda.error(); as e) { <app-aviso [error]="e" /> }
+      @else if (agenda.datos()?.length) {
+        <ul class="agenda">
+          @for (a of agenda.datos(); track a.servicio) {
+            <li><span>{{ a.servicio }}</span><span class="num"><strong>{{ a.cupos }}</strong> cupos · {{ a.reservas }} reservas</span></li>
+          }
+        </ul>
+      } @else { <app-vacio icono="hiking" titulo="Sin servicios agendados" /> }
+    </article>
+  </div>
+</section>

@@ -1,0 +1,70 @@
+// Identidad visual TurismoUQ: paisaje cultural cafetero.
+// Cafe tostado (texto), verde cafetal (marca), cereza de cafe (acento),
+// ambar de cosecha (secundario) y crema de bahareque (fondos).
+:root {
+  color-scheme: light;
+
+  // Superficies
+  --crema-50: #fffdf9;
+  --crema-100: #faf5ec;
+  --crema-200: #f1e7d6;
+  --crema-300: #e4d5bd;
+
+  // Cafe (texto y estructura)
+  --cafe-900: #2b1d14;
+  --cafe-800: #3d2a1d;
+  --cafe-700: #5a4030;
+  --cafe-600: #6f5847;
+  --cafe-500: #8a7563;
+
+  // Verde cafetal (marca)
+  --verde-50: #ecf5ef;
+  --verde-100: #d3e9db;
+  --verde-200: #a9d3b8;
+  --verde-300: #74b58d;
+  --verde-400: #3f9566;
+  --verde-500: #1f7a4d;
+  --verde-600: #17633e;
+  --verde-700: #114c30;
+  --verde-800: #0c3823;
+
+  // Cereza de cafe (acciones destacadas)
+  --cereza-50: #fbeeea;
+  --cereza-500: #b8432a;
+  --cereza-600: #9c3620;
+
+  // Ambar de cosecha
+  --ambar-50: #fcf4e3;
+  --ambar-100: #f7e3b8;
+  --ambar-500: #c27c0e;
+  --ambar-700: #8a5606;
+
+  // Estados (reservados, siempre con icono + texto)
+  --ok: #1f7a4d;
+  --ok-fondo: #e3f2e9;
+  --aviso: #8a5606;
+  --aviso-fondo: #fcf0d6;
+  --error: #a3301b;
+  --error-fondo: #fbe9e4;
+  --info: #285e8e;
+  --info-fondo: #e6eff8;
+
+  // Series de graficos (validadas: CVD y contraste sobre --crema-50)
+  --serie-1: #1f7a4d;
+  --serie-2: #c27c0e;
+
+  // Tipografia
+  --fuente-titulo: 'Fraunces Variable', 'Georgia', serif;
+  --fuente-texto: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  // Forma
+  --radio-s: 8px;
+  --radio-m: 14px;
+  --radio-l: 22px;
+  --sombra-1: 0 1px 2px rgb(43 29 20 / 6%), 0 1px 1px rgb(43 29 20 / 4%);
+  --sombra-2: 0 6px 18px -6px rgb(43 29 20 / 18%), 0 2px 6px rgb(43 29 20 / 6%);
+  --sombra-3: 0 24px 48px -16px rgb(43 29 20 / 28%);
+  --borde: 1px solid var(--crema-300);
+  --transicion: 160ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ancho-menu: 264px;
+}

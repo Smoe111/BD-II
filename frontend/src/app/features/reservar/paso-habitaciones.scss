@@ -1,0 +1,37 @@
+:host { display: grid; gap: 18px; }
+
+.busqueda {
+  display: grid; gap: 12px; align-items: end;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  .huespedes { max-width: 140px; }
+}
+.error-rango { grid-column: 1 / -1; color: var(--error); font-size: 0.82rem; }
+
+.conteo { color: var(--cafe-700); font-size: 0.92rem; }
+
+.alojamientos { display: grid; gap: 16px; }
+.alojamiento {
+  background: var(--crema-50); border: var(--borde); border-radius: var(--radio-m); padding: 18px;
+  transition: border-color var(--transicion), box-shadow var(--transicion);
+  &.elegido { border-color: var(--verde-400); box-shadow: 0 0 0 3px var(--verde-100); }
+  header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 12px; align-items: flex-start; }
+  header p { color: var(--cafe-600); font-size: 0.85rem; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+  header p .material-symbols-rounded { font-size: 16px; color: var(--cereza-500); }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
+}
+
+.habitacion {
+  width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
+  padding: 12px 14px; border-radius: var(--radio-s); border: 1px solid var(--crema-300); background: #fff;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  transition: border-color var(--transicion), background var(--transicion);
+  &:hover { border-color: var(--verde-300); }
+  &.activa { border-color: var(--verde-500); background: var(--verde-50); .check { color: var(--verde-500); font-variation-settings: 'FILL' 1; } }
+  .check { color: var(--cafe-500); font-size: 22px; }
+  .info { display: grid; gap: 2px; min-width: 0; }
+  .info strong { font-size: 0.9rem; }
+  small { font-size: 0.76rem; color: var(--cafe-600); display: flex; align-items: center; gap: 3px; }
+  small .material-symbols-rounded { font-size: 14px; }
+  .precio { display: grid; justify-items: end; text-align: right; }
+  .precio strong { font-size: 0.95rem; color: var(--verde-700); }
+}

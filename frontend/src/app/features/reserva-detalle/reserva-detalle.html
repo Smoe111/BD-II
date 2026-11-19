@@ -1,0 +1,105 @@
+<section class="pagina">
+  <button type="button" class="volver" (click)="volver()"><span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>Volver</button>
+
+  @if (detalle.cargando()) {
+    <app-cargando [filas]="8" />
+  } @else if (detalle.error(); as e) {
+    <app-aviso [error]="e" />
+  } @else if (detalle.datos(); as d) {
+    <header class="encabezado">
+      <div>
+        <span class="antetitulo">Reserva N.º {{ d.reserva.idReserva }}</span>
+        <h1>{{ d.habitaciones[0]?.alojamiento ?? 'Reserva' }}</h1>
+        <p>
+          {{ d.habitaciones[0]?.municipio }}, Quindío · {{ d.reserva.fechaCheckin | fecha }} → {{ d.reserva.fechaCheckout | fecha }}
+          ({{ noches() }} {{ noches() === 1 ? 'noche' : 'noches' }}) · {{ d.reserva.numHuespedes }} huéspedes
+        </p>
+      </div>
+      <app-estado-reserva [estado]="d.reserva.estado" />
+    </header>
+
+    <div class="rejilla-2">
+      <article class="tarjeta">
+        <header><h2>Titular</h2></header>
+        <dl class="ficha">
+          <div><dt>Huésped</dt><dd><a [routerLink]="['/huespedes', d.reserva.idCliente]">{{ d.reserva.cliente }}</a></dd></div>
+          <div><dt>Registrada por</dt><dd>{{ d.reserva.registradaPor }}</dd></div>
+          <div><dt>Creada</dt><dd>{{ d.reserva.fechaCreacion | fecha: 'hora' }}</dd></div>
+        </dl>
+      </article>
+
+      <article class="tarjeta">
+        <header>
+          <div><h2>Cuenta</h2><p>Consulta 7: UNPIVOT de contratado, pagado y pendiente</p></div>
+        </header>
+        <div class="progreso" role="img" [attr.aria-label]="pctPagado() + ' % pagado'">
+          <span [style.width.%]="pctPagado()"></span>
+        </div>
+        <p class="pct">{{ pctPagado() }} % pagado</p>
+        @if (financiero.datos(); as filas) {
+          <dl class="cifras">
+            @for (f of filas; track f.conceptoPago) {
+              <div [class.pendiente]="f.conceptoPago === 'TOTAL_PENDIENTE' && f.monto > 0">
+                <dt>{{ concepto(f.conceptoPago) }}</dt><dd class="num">{{ f.monto | pesos }}</dd>
+              </div>
+            }
+          </dl>
+        }
+      </article>
+    </div>
+
+    @if (d.reserva.estado !== 'CANCELADA') {
+      <app-registrar-pago [reserva]="d.reserva" (pagado)="alPagar($event)" />
+    }
+
+    <article class="tarjeta">
+      <header><h2>Habitaciones</h2></header>
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead><tr><th>Habitación</th><th>Llegada</th><th>Salida</th><th class="der">Valor base</th><th class="der">Con temporada</th></tr></thead>
+          <tbody>
+            @for (h of d.habitaciones; track h.idHabitacion) {
+              <tr>
+                <td>N.º {{ h.numeroHabitacion }}</td>
+                <td>{{ h.fechaCheckin | fecha }}</td>
+                <td>{{ h.fechaCheckout | fecha }}</td>
+                <td class="der">{{ h.valorPrevio | pesos }}</td>
+                <td class="der"><strong>{{ h.valorReserva | pesos }}</strong></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <div class="rejilla-2">
+      <article class="tarjeta">
+        <header><h2>Servicios</h2><span class="num muted">{{ totalServicios() | pesos }}</span></header>
+        @if (d.servicios.length) {
+          <ul class="lista">
+            @for (s of d.servicios; track s.idServicio) {
+              <li>
+                <span><strong>{{ s.servicio }}</strong><small>{{ s.fechaServicio | fecha }} · × {{ s.cantidad }}</small></span>
+                <span class="num">{{ s.valorServicio | pesos }}</span>
+              </li>
+            }
+          </ul>
+        } @else { <p class="muted">Sin servicios complementarios.</p> }
+      </article>
+
+      <article class="tarjeta">
+        <header><h2>Pagos</h2></header>
+        @if (d.pagos.length) {
+          <ul class="lista">
+            @for (p of d.pagos; track p.idPago) {
+              <li>
+                <span><strong>{{ p.metodoPago }}</strong><small>{{ p.fechaPago | fecha: 'hora' }} · {{ p.estado }}</small></span>
+                <span class="num">{{ p.valor | pesos }}</span>
+              </li>
+            }
+          </ul>
+        } @else { <p class="muted">Aún no tiene pagos.</p> }
+      </article>
+    </div>
+  }
+</section>

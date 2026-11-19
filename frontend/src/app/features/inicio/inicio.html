@@ -1,0 +1,98 @@
+<section class="pagina">
+  <div class="portada">
+    <div class="saludo">
+      <span class="antetitulo">{{ hoy | fecha: 'larga' }}</span>
+      <h1>Bienvenido al Paisaje Cultural Cafetero{{ operador() ? ', ' + operador()!.usuario : '' }}</h1>
+      <p>Fincas, glampings y hoteles en los doce municipios del Quindío, entre cafetales y palmas de cera.</p>
+    </div>
+
+    <form class="buscador" [formGroup]="busqueda" (ngSubmit)="buscar()">
+      <label class="campo"><span>Llegada</span><input class="control" type="date" formControlName="checkin" [min]="hoy" /></label>
+      <label class="campo"><span>Salida</span><input class="control" type="date" formControlName="checkout" /></label>
+      <label class="campo pequeno"><span>Huéspedes</span><input class="control" type="number" min="1" max="60" formControlName="huespedes" /></label>
+      <label class="campo">
+        <span>Destino</span>
+        <select class="control" formControlName="municipio">
+          <option [ngValue]="0">Todo el Quindío</option>
+          @for (m of municipios(); track m.idMunicipio) { <option [ngValue]="m.idMunicipio">{{ m.nombre }}</option> }
+        </select>
+      </label>
+      <button class="boton acento" type="submit">
+        <span class="material-symbols-rounded" aria-hidden="true">travel_explore</span>Ver disponibilidad
+      </button>
+    </form>
+
+    <svg class="montanas" viewBox="0 0 1200 200" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 120 C150 60 260 110 380 80 S600 20 760 70 S1000 110 1200 60 V200 H0Z" fill="#17633e" opacity=".55" />
+      <path d="M0 160 C200 110 330 150 520 125 S860 100 1000 130 S1130 150 1200 120 V200 H0Z" fill="#114c30" opacity=".75" />
+      <g fill="#0c3823" opacity=".55">
+        @for (x of [60, 110, 170, 980, 1030, 1100]; track x) {
+          <circle [attr.cx]="x" cy="168" r="10" /><circle [attr.cx]="x + 16" cy="172" r="8" />
+        }
+      </g>
+    </svg>
+  </div>
+
+  @if (cartera.error(); as e) { <app-aviso [error]="e" /> }
+
+  <div class="kpis">
+    <app-kpi icono="receipt_long" etiqueta="Facturado histórico" [valor]="formatoCompacto(totales().facturado)"
+             [detalle]="totales().reservas.toLocaleString('es-CO') + ' reservas activas o cerradas'" />
+    <app-kpi icono="savings" etiqueta="Recaudado" [valor]="formatoCompacto(totales().recaudado)"
+             detalle="Pagos aprobados" />
+    <app-kpi icono="account_balance_wallet" etiqueta="Cartera pendiente" [valor]="formatoCompacto(totales().pendiente)"
+             [detalle]="(totales().pct | number: '1.1-1') + ' % de lo facturado'" />
+    <app-kpi icono="luggage" etiqueta="Llegadas de hoy" [valor]="(llegadas.datos()?.length ?? 0).toString()"
+             detalle="Reservas confirmadas" />
+  </div>
+
+  <div class="rejilla-2">
+    <article class="tarjeta">
+      <header>
+        <div>
+          <h2>Ingresos por mes</h2>
+          <p>Consulta 4 (LAG). En ámbar, el mes en curso: {{ mesActual()?.ingresoMes ?? 0 | pesos }}.</p>
+        </div>
+        <a class="boton fantasma pequeno" routerLink="/reportes/tendencia">Ver reporte</a>
+      </header>
+      @if (variacion.cargando()) { <app-cargando [filas]="6" /> }
+      @else if (meses().length) {
+        <app-grafico-columnas [puntos]="meses()" [formato]="formatoCompacto" [alto]="230" descripcion="Ingresos por mes" />
+      }
+    </article>
+
+    <article class="tarjeta">
+      <header>
+        <div><h2>Alojamiento líder por municipio</h2><p>Consulta 3 (RANK por municipio), ingresos históricos.</p></div>
+        <a class="boton fantasma pequeno" routerLink="/reportes/ranking">Ver ranking</a>
+      </header>
+      @if (top.cargando()) { <app-cargando [filas]="8" /> }
+      @else { <app-barras-horizontales [puntos]="lideres()" [formato]="formatoCompacto" /> }
+    </article>
+  </div>
+
+  <article class="tarjeta">
+    <header>
+      <div><h2>Llegadas de hoy</h2><p>Reservas confirmadas con check-in hoy (índice compuesto estado + fecha).</p></div>
+      <a class="boton fantasma pequeno" routerLink="/operacion">Operación del día</a>
+    </header>
+    @if (llegadas.cargando()) { <app-cargando /> }
+    @else if (llegadas.datos()?.length) {
+      <ul class="llegadas">
+        @for (l of llegadas.datos()!.slice(0, 6); track l.idReserva) {
+          <li>
+            <a [routerLink]="['/reservas', l.idReserva]">
+              <span class="avatar">{{ l.nombres[0] }}{{ l.apellidos[0] }}</span>
+              <span class="datos"><strong>{{ l.nombres }} {{ l.apellidos }}</strong>
+                <small>{{ l.numHuespedes }} huéspedes · sale {{ l.fechaCheckout | fecha }}</small></span>
+              @if (l.valorPendiente > 0) { <span class="etiqueta aviso num">{{ l.valorPendiente | pesos: 'compacto' }}</span> }
+              @else { <span class="etiqueta ok">Al día</span> }
+            </a>
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="muted">No hay llegadas confirmadas para hoy.</p>
+    }
+  </article>
+</section>
