@@ -44,6 +44,9 @@ DECLARE
   v_out  DATE := TRUNC(SYSDATE) + 13;
 
   v_h1 NUMBER;  v_h2 NUMBER;  v_h3 NUMBER;  v_a1 NUMBER;
+  TYPE t_primera IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
+  v_primera t_primera;                  -- alojamiento -> 1a habitacion libre
+  v_idx     PLS_INTEGER;
   v_cli NUMBER; v_ucli NUMBER; v_cli2 NUMBER; v_ucli2 NUMBER;
   c_staff CONSTANT NUMBER := 1;          -- recep01
   v_res NUMBER; v_res2 NUMBER;
@@ -197,17 +200,35 @@ BEGIN
               JOIN alojamiento a ON a.id_alojamiento = hb.id_alojamiento
              WHERE hb.activo = 'S' AND a.activo = 'S'
              ORDER BY hb.id_habitacion) LOOP
+    -- h1 y h2: las dos primeras libres de un MISMO alojamiento (no
+    -- basta con la primera libre: su alojamiento puede no tener otra).
+    -- h3: una libre de otro alojamiento.
     IF libre(h.id_habitacion, v_in - 1, v_out + 25) THEN
-      IF v_h1 IS NULL THEN
-        v_h1 := h.id_habitacion;  v_a1 := h.id_alojamiento;
-      ELSIF v_h2 IS NULL AND h.id_alojamiento = v_a1 THEN
-        v_h2 := h.id_habitacion;
+      IF v_h2 IS NULL THEN
+        IF v_primera.EXISTS(h.id_alojamiento) THEN
+          v_h1 := v_primera(h.id_alojamiento);
+          v_a1 := h.id_alojamiento;
+          v_h2 := h.id_habitacion;
+        ELSE
+          v_primera(h.id_alojamiento) := h.id_habitacion;
+        END IF;
       ELSIF v_h3 IS NULL AND h.id_alojamiento <> v_a1 THEN
         v_h3 := h.id_habitacion;
       END IF;
     END IF;
     EXIT WHEN v_h2 IS NOT NULL AND v_h3 IS NOT NULL;
   END LOOP;
+
+  -- h3 puede ser la libre de un alojamiento visto antes que el de h1/h2
+  IF v_h3 IS NULL AND v_h2 IS NOT NULL THEN
+    v_idx := v_primera.FIRST;
+    WHILE v_idx IS NOT NULL AND v_h3 IS NULL LOOP
+      IF v_idx <> v_a1 THEN
+        v_h3 := v_primera(v_idx);
+      END IF;
+      v_idx := v_primera.NEXT(v_idx);
+    END LOOP;
+  END IF;
 
   SELECT id_cliente, id_usuario_sistema INTO v_cli, v_ucli
     FROM (SELECT id_cliente, id_usuario_sistema FROM usuario_sistema

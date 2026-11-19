@@ -1,0 +1,161 @@
+<section class="pagina">
+  <header class="encabezado">
+    <div>
+      <span class="antetitulo">Nueva reserva</span>
+      <h1>Hospedaje en el corazón del Quindío</h1>
+      <p>
+        Elija fechas y habitaciones. El valor de cada noche aplica el porcentaje de su temporada. Al confirmar,
+        la base de datos crea la reserva, los servicios y el pago en una sola transacción.
+      </p>
+    </div>
+  </header>
+
+  @if (paso() < 4) {
+    <ol class="pasos" aria-label="Pasos de la reserva">
+      @for (p of pasos; track p.n) {
+        <li [class.actual]="paso() === p.n" [class.hecho]="paso() > p.n">
+          <button type="button" (click)="irA(p.n)" [disabled]="p.n >= paso()" [attr.aria-current]="paso() === p.n ? 'step' : null">
+            <span class="numero">
+              @if (paso() > p.n) { <span class="material-symbols-rounded" aria-hidden="true">check</span> } @else { {{ p.n }} }
+            </span>
+            {{ p.titulo }}
+          </button>
+        </li>
+      }
+    </ol>
+
+    <div class="cuerpo">
+      <div class="contenido">
+        @switch (paso()) {
+          @case (1) { <app-paso-habitaciones [checkin]="checkin()" [checkout]="checkout()" [huespedes]="huespedes()" [municipio]="municipio()" /> }
+          @case (2) { <app-paso-huesped /> }
+          @case (3) { <app-paso-pago /> }
+        }
+      </div>
+
+      <aside class="resumen" aria-label="Resumen de la reserva">
+        <h2>Su estadía</h2>
+        @if (b.criterio(); as c) {
+          <dl class="fechas">
+            <div><dt>Llegada</dt><dd>{{ c.checkin | fecha }}</dd></div>
+            <div><dt>Salida</dt><dd>{{ c.checkout | fecha }}</dd></div>
+            <div><dt>Noches</dt><dd class="num">{{ noches() }}</dd></div>
+            <div><dt>Huéspedes</dt><dd class="num">{{ c.huespedes }}</dd></div>
+          </dl>
+        } @else {
+          <p class="muted">Busque disponibilidad para empezar.</p>
+        }
+
+        @if (b.habitaciones().length) {
+          <h3>{{ b.alojamiento() }}</h3>
+          <ul class="lineas">
+            @for (h of b.habitaciones(); track h.idHabitacion; let i = $index) {
+              <li>
+                <span>{{ h.tipoHabitacion }} N.º {{ h.numeroHabitacion }}</span>
+                <span class="num">{{ h.valorEstadia | pesos }}</span>
+              </li>
+              @if (b.cotizaciones()[i]; as cot) {
+                @for (t of cot.detalle; track t.desde) {
+                  <li class="tramo">
+                    <span>{{ t.noches }} × {{ t.valorNoche | pesos }} · {{ t.temporada }} (+{{ t.porcentaje }} %)</span>
+                    <span class="num">{{ t.subtotal | pesos }}</span>
+                  </li>
+                }
+              }
+            }
+            @for (l of b.servicios(); track l.idServicio) {
+              <li class="servicio">
+                <span>{{ l.servicio?.nombre ?? 'Servicio cód. ' + l.idServicio }} × {{ l.cantidad }}</span>
+                <span class="num">{{ l.servicio ? (b.valorLinea(l) | pesos) : '¿?' }}</span>
+              </li>
+            }
+          </ul>
+          @if (!b.capacidadSuficiente()) {
+            <p class="alerta">
+              <span class="material-symbols-rounded" aria-hidden="true">group_add</span>
+              Capacidad {{ b.capacidad() }} para {{ b.criterio()?.huespedes }} huéspedes: agregue otra habitación.
+            </p>
+          }
+          <div class="total">
+            <span>Total estimado</span>
+            <strong class="num">{{ b.total() | pesos }}</strong>
+          </div>
+          @if (paso() === 3 && b.conPago()) {
+            <div class="pagar">
+              <span>Paga ahora</span>
+              <strong class="num">{{ b.valorPago() | pesos }}</strong>
+            </div>
+          }
+        }
+
+        @if (b.cliente(); as cl) {
+          <p class="titular"><span class="material-symbols-rounded" aria-hidden="true">person</span>{{ cl.nombres }} {{ cl.apellidos }}</p>
+        }
+
+        @if (cotizacion.error(); as e) { <app-aviso [error]="e" /> }
+        @if (envio.error(); as e) {
+          <app-aviso [error]="e" />
+          @if (e.esConflicto) {
+            <button class="boton suave" type="button" (click)="volverABuscar()">
+              <span class="material-symbols-rounded" aria-hidden="true">refresh</span>Buscar otra habitación
+            </button>
+          }
+        }
+
+        <div class="acciones">
+          @if (paso() > 1) {
+            <button class="boton suave" type="button" (click)="irA($any(paso() - 1))">Atrás</button>
+          }
+          <button class="boton" type="button" [class.acento]="paso() === 3" (click)="continuar()"
+                  [disabled]="!puedeContinuar() || cotizacion.cargando() || envio.cargando()">
+            @if (cotizacion.cargando() || envio.cargando()) {
+              <span class="material-symbols-rounded giro" aria-hidden="true">progress_activity</span>
+            }
+            {{ paso() === 3 ? (b.conPago() ? 'Confirmar y pagar' : 'Crear reserva') : 'Continuar' }}
+          </button>
+        </div>
+        <p class="operador">Registra: <strong>{{ operador()?.usuario ?? '—' }}</strong></p>
+      </aside>
+    </div>
+  } @else if (detalleCreado(); as d) {
+    <article class="tarjeta exito">
+      <div class="sello" [class.parcial]="conPago()?.resultado === 'ROLLBACK_PARCIAL'">
+        <span class="material-symbols-rounded" aria-hidden="true">
+          {{ conPago()?.resultado === 'ROLLBACK_PARCIAL' ? 'rule' : 'celebration' }}
+        </span>
+      </div>
+      <div class="texto">
+        <span class="antetitulo">Reserva N.º {{ d.reserva.idReserva }}</span>
+        <h2>
+          @switch (conPago()?.resultado) {
+            @case ('COMPLETA') { Reserva confirmada y pagada }
+            @case ('ROLLBACK_PARCIAL') { Reserva confirmada, sin los servicios }
+            @default { Reserva creada, pendiente de pago }
+          }
+        </h2>
+        <p>
+          {{ d.reserva.cliente }} · {{ d.habitaciones[0]?.alojamiento }}, {{ d.habitaciones[0]?.municipio }} ·
+          {{ d.reserva.fechaCheckin | fecha }} → {{ d.reserva.fechaCheckout | fecha }}
+        </p>
+        @if (conPago()?.resultado === 'ROLLBACK_PARCIAL') {
+          <p class="explica">
+            Un servicio falló y el procedimiento hizo <code>ROLLBACK TO sp_servicios</code>: se deshicieron solo los
+            servicios. La reserva y el pago sí quedaron guardados.
+          </p>
+        }
+        <dl class="cifras">
+          <div><dt>Total</dt><dd class="num">{{ d.reserva.valorTotal | pesos }}</dd></div>
+          <div><dt>Pagado</dt><dd class="num">{{ d.reserva.valorPagado | pesos }}</dd></div>
+          <div><dt>Pendiente</dt><dd class="num">{{ d.reserva.valorPendiente | pesos }}</dd></div>
+        </dl>
+        @if (conPago(); as r) {
+          <app-salida-plsql [lineas]="r.salida" titulo="Transacción en Oracle (DBMS_OUTPUT)" />
+        }
+        <div class="acciones">
+          <a class="boton" [routerLink]="['/reservas', d.reserva.idReserva]">Ver la reserva</a>
+          <button class="boton suave" type="button" (click)="nuevaReserva()">Otra reserva</button>
+        </div>
+      </div>
+    </article>
+  }
+</section>

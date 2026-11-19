@@ -1,0 +1,80 @@
+<section class="pagina">
+  <header class="encabezado">
+    <div>
+      <span class="antetitulo">Gerencia</span>
+      <h1>Tarifas y auditoría</h1>
+      <p>Valor base por noche de cada tipo de habitación. Cada cambio queda en AUDITORIA_TARIFA, registrado por el trigger
+        con el valor anterior, el nuevo y quién lo hizo.</p>
+    </div>
+  </header>
+
+  <div class="cuerpo">
+    <article class="tarjeta">
+      <header>
+        <h2>Tarifas</h2>
+        <input class="control buscar" type="search" placeholder="Filtrar por alojamiento…" [ngModel]="filtro()" (ngModelChange)="filtro.set($event)" aria-label="Filtrar tarifas" />
+      </header>
+      @if (tarifas.cargando() && !tarifas.datos()) { <app-cargando [filas]="10" /> }
+      @else if (tarifas.error(); as e) { <app-aviso [error]="e" /> }
+      @else {
+        <div class="tabla-contenedor tabla-alta">
+          <table class="tabla">
+            <thead><tr><th>Tarifa</th><th class="der">Habitaciones</th><th class="der">Valor noche</th></tr></thead>
+            <tbody>
+              @for (t of visibles(); track t.idTarifa) {
+                <tr class="clic" [class.sel]="elegida()?.idTarifa === t.idTarifa" (click)="elegir(t)" (keydown.enter)="elegir(t)" tabindex="0">
+                  <td>{{ t.nombre }}</td>
+                  <td class="der">{{ t.habitaciones }}</td>
+                  <td class="der"><strong>{{ t.valor | pesos }}</strong></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </article>
+
+    <aside class="tarjeta panel">
+      @if (elegida(); as t) {
+        <header><div><h2>{{ t.nombre }}</h2><p>{{ t.descripcion }}</p></div></header>
+        <form class="editar" (ngSubmit)="guardar()">
+          <label class="campo">
+            <span>Nuevo valor por noche</span>
+            <input class="control num" type="number" min="1000" step="1000" name="valor" [ngModel]="nuevoValor()" (ngModelChange)="nuevoValor.set($event)" />
+            <small>Actual: {{ t.valor | pesos }}
+              @if (variacion()) { · <strong [class.sube]="variacion() > 0" [class.baja]="variacion() < 0">{{ variacion() > 0 ? '+' : '' }}{{ variacion() | number: '1.1-1' }} %</strong> }
+            </small>
+          </label>
+          <button class="boton" type="submit" [disabled]="!nuevoValor() || nuevoValor() === t.valor || cambio.cargando() || !operador()">
+            <span class="material-symbols-rounded" aria-hidden="true">save</span>Guardar como {{ operador()?.usuario }}
+          </button>
+        </form>
+        @if (cambio.error(); as e) { <app-aviso [error]="e" /> }
+        @if (cambio.datos()) { <app-aviso tipo="ok" texto="Tarifa actualizada. El trigger registró el cambio en la auditoría." /> }
+
+        <h3 class="sub">Historial de cambios</h3>
+        @if (auditoria.cargando()) { <app-cargando [filas]="3" /> }
+        @else if (auditoria.datos()?.length) {
+          <ol class="linea-tiempo">
+            @for (a of auditoria.datos(); track a.idAuditoria) {
+              <li>
+                <span class="punto" aria-hidden="true"></span>
+                <div>
+                  <strong>{{ a.operacion }}</strong>
+                  @if (a.valorAnterior !== null) { <span class="num"> {{ a.valorAnterior | pesos }} → </span> }
+                  <span class="num">{{ a.valorNuevo | pesos }}</span>
+                  <small>{{ a.fechaCambio | fecha: 'hora' }} · app: {{ a.usuarioApp ?? '—' }} · BD: {{ a.usuarioBd }} · sentencia {{ a.idSentencia }}</small>
+                </div>
+              </li>
+            }
+          </ol>
+        } @else { <p class="muted">Sin cambios registrados.</p> }
+      } @else {
+        <div class="indicacion">
+          <span class="material-symbols-rounded" aria-hidden="true">touch_app</span>
+          <p>Elija una tarifa para cambiar su valor y ver su historial.</p>
+        </div>
+      }
+    </aside>
+  </div>
+</section>

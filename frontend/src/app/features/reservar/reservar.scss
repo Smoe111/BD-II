@@ -1,0 +1,82 @@
+.pasos {
+  list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; flex-wrap: wrap;
+  li { display: flex; align-items: center; }
+  li + li::before { content: ''; width: 28px; height: 2px; background: var(--crema-300); margin-right: 8px; }
+  li.hecho + li::before { background: var(--verde-400); }
+  button {
+    display: flex; align-items: center; gap: 10px; border: 0; background: none; font: inherit;
+    font-weight: 600; color: var(--cafe-500); padding: 6px 4px; cursor: pointer;
+    &:disabled { cursor: default; }
+  }
+  .numero {
+    width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 0.85rem;
+    background: var(--crema-200); color: var(--cafe-600);
+    .material-symbols-rounded { font-size: 18px; }
+  }
+  .actual button { color: var(--cafe-900); }
+  .actual .numero { background: var(--verde-500); color: #fff; box-shadow: 0 0 0 4px var(--verde-100); }
+  .hecho button { color: var(--verde-700); }
+  .hecho .numero { background: var(--verde-100); color: var(--verde-700); }
+}
+
+.cuerpo { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+.contenido { min-width: 0; }
+
+.resumen {
+  position: sticky; top: 84px; display: grid; gap: 14px; padding: 22px; border-radius: var(--radio-l);
+  background: var(--crema-50); border: var(--borde); box-shadow: var(--sombra-2);
+  h3 { font-size: 1rem; color: var(--verde-700); }
+}
+.fechas {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0;
+  div { background: var(--crema-100); border-radius: var(--radio-s); padding: 8px 10px; }
+  dt { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cafe-500); }
+  dd { margin: 0; font-weight: 600; font-size: 0.9rem; }
+}
+.lineas {
+  list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 0.86rem;
+  li { display: flex; justify-content: space-between; gap: 10px; }
+  .tramo { font-size: 0.76rem; color: var(--cafe-600); padding-left: 10px; border-left: 2px solid var(--ambar-100); }
+  .servicio { color: var(--cafe-700); }
+}
+.alerta { display: flex; gap: 8px; font-size: 0.82rem; color: var(--aviso); background: var(--aviso-fondo); padding: 8px 10px; border-radius: var(--radio-s); }
+.total, .pagar {
+  display: flex; justify-content: space-between; align-items: baseline; padding-top: 12px; border-top: 1px dashed var(--crema-300);
+  span { font-weight: 600; color: var(--cafe-700); }
+  strong { font-family: var(--fuente-titulo); font-size: 1.5rem; color: var(--verde-700); }
+}
+.pagar { border-top: 0; padding-top: 0; strong { font-size: 1.1rem; color: var(--cereza-500); } }
+.titular { display: flex; gap: 6px; align-items: center; font-size: 0.88rem; color: var(--cafe-700); }
+.acciones { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.operador { font-size: 0.76rem; color: var(--cafe-500); text-align: right; }
+.giro { animation: girar 0.9s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+
+.exito {
+  display: grid; grid-template-columns: auto 1fr; gap: 24px; padding: 32px; max-width: 900px;
+  .sello {
+    width: 72px; height: 72px; border-radius: 22px; display: grid; place-items: center;
+    background: var(--verde-50); color: var(--verde-600);
+    .material-symbols-rounded { font-size: 38px; }
+    &.parcial { background: var(--aviso-fondo); color: var(--aviso); }
+  }
+  .texto { display: grid; gap: 12px; min-width: 0; }
+  .antetitulo { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--verde-600); }
+  h2 { font-size: 1.7rem; }
+  p { color: var(--cafe-700); }
+  .explica { background: var(--aviso-fondo); color: var(--cafe-800); padding: 10px 12px; border-radius: var(--radio-s); font-size: 0.88rem; }
+  code { font-size: 0.82rem; }
+  .acciones { justify-content: flex-start; }
+}
+.cifras {
+  display: flex; gap: 12px; margin: 0; flex-wrap: wrap;
+  div { flex: 1 1 140px; background: var(--crema-100); border-radius: var(--radio-s); padding: 10px 14px; }
+  dt { font-size: 0.74rem; color: var(--cafe-500); font-weight: 600; }
+  dd { margin: 0; font-family: var(--fuente-titulo); font-size: 1.25rem; font-weight: 600; }
+}
+
+@media (max-width: 1100px) {
+  .cuerpo { grid-template-columns: 1fr; }
+  .resumen { position: static; }
+}
+@media (max-width: 600px) { .exito { grid-template-columns: 1fr; padding: 22px; } }

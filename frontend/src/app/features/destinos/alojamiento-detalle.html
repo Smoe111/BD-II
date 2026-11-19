@@ -1,0 +1,79 @@
+<section class="pagina">
+  <a class="volver" routerLink="/destinos"><span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>Destinos</a>
+
+  @if (detalle.cargando()) { <app-cargando [filas]="8" /> }
+  @else if (detalle.error(); as e) { <app-aviso [error]="e" /> }
+  @else if (detalle.datos(); as d) {
+    <header class="encabezado">
+      <div>
+        <span class="antetitulo">{{ d.alojamiento.tipoAlojamiento }} · {{ d.alojamiento.municipio }}</span>
+        <h1>{{ d.alojamiento.nombre }}</h1>
+        <p>{{ d.alojamiento.direccion }} · {{ d.alojamiento.calificacion }} estrellas · {{ d.habitaciones.length }} habitaciones</p>
+      </div>
+      <a class="boton acento" routerLink="/reservar"
+         [queryParams]="{ checkin: checkin(), checkout: checkout(), huespedes: 2, municipio: d.alojamiento.idMunicipio }">
+        <span class="material-symbols-rounded" aria-hidden="true">event_available</span>Reservar en {{ d.alojamiento.municipio }}
+      </a>
+    </header>
+
+    <div class="cuerpo">
+      <article class="tarjeta">
+        <header><div><h2>Habitaciones</h2><p>Elija una para cotizar.</p></div></header>
+        <div class="tabla-contenedor">
+          <table class="tabla">
+            <thead><tr><th>N.º</th><th>Tipo</th><th class="der">Capacidad</th><th>Tarifa</th><th class="der">Noche base</th><th></th></tr></thead>
+            <tbody>
+              @for (h of d.habitaciones; track h.idHabitacion) {
+                <tr [class.sel]="habitacion()?.idHabitacion === h.idHabitacion">
+                  <td>{{ h.numeroHabitacion }}</td>
+                  <td>{{ h.tipoHabitacion }}</td>
+                  <td class="der">{{ h.capacidadMaxima }}</td>
+                  <td class="muted">{{ h.tarifa }}</td>
+                  <td class="der">{{ h.valorNoche | pesos }}</td>
+                  <td class="der">
+                    @if (h.activo === 'S') {
+                      <button class="boton fantasma pequeno" type="button" (click)="elegir(h)">Cotizar</button>
+                    } @else { <span class="etiqueta error">Inactiva</span> }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <aside class="tarjeta cotizador">
+        <header><div><h2>Cotizador</h2><p>fn_valor_estadia: cada noche paga el porcentaje de su temporada.</p></div></header>
+        <div class="fechas">
+          <label class="campo"><span>Llegada</span>
+            <input class="control" type="date" [ngModel]="checkin()" (ngModelChange)="checkin.set($event); cotizar()" /></label>
+          <label class="campo"><span>Salida</span>
+            <input class="control" type="date" [ngModel]="checkout()" (ngModelChange)="checkout.set($event); cotizar()" /></label>
+        </div>
+        @if (habitacion(); as h) { <p class="hab">Habitación {{ h.numeroHabitacion }} · {{ h.tipoHabitacion }}</p> }
+
+        @if (cotizacion.cargando()) { <app-cargando [filas]="3" /> }
+        @else if (cotizacion.error(); as e) { <app-aviso [error]="e" /> }
+        @else if (cotizacion.datos(); as c) {
+          <ul class="tramos">
+            @for (t of c.detalle; track t.desde) {
+              <li>
+                <div class="fila">
+                  <strong>{{ t.temporada }}</strong>
+                  <span class="etiqueta" [class.aviso]="t.porcentaje > 0">{{ t.porcentaje > 0 ? '+' : '' }}{{ t.porcentaje }} %</span>
+                </div>
+                <small>{{ t.desde | fecha }} → {{ t.hasta | fecha }} · {{ t.noches }} × {{ t.valorNoche | pesos }}</small>
+                <div class="barra"><span [style.width.%]="(t.subtotal / tramoMaximo()) * 100"></span></div>
+                <span class="num subtotal">{{ t.subtotal | pesos }}</span>
+              </li>
+            }
+          </ul>
+          <dl class="totales">
+            <div><dt>Sin temporada ({{ c.noches }} noches)</dt><dd class="num">{{ c.valorBase | pesos }}</dd></div>
+            <div class="final"><dt>Valor de la estadía</dt><dd class="num">{{ c.valorEstadia | pesos }}</dd></div>
+          </dl>
+        }
+      </aside>
+    </div>
+  }
+</section>

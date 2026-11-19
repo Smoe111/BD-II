@@ -7,39 +7,54 @@ entidad-relación, carga de datos y consultas analíticas sobre Oracle.
 
 ## Stack
 
-- **Backend:** Spring Boot 4.1.1 · Java 17+ · Spring Data JPA (Hibernate)
+- **Backend:** Spring Boot 4.1.1 · Java 17+ · API REST sobre JDBC (`JdbcClient`) que
+  llama los paquetes PL/SQL; ver [`API.md`](API.md)
+- **Frontend:** Angular 21 (componentes standalone, signals, carga diferida); ver
+  [`frontend/README.md`](frontend/README.md)
 - **Base de datos:** Oracle Database XE 21c, en contenedor Docker
   (`gvenzl/oracle-xe`)
 
 ## Estructura del repo
 
 ```
-src/                    Código fuente de la aplicación Spring Boot
+src/                    API REST Spring Boot (ver API.md)
+frontend/               Aplicacion web Angular (ver frontend/README.md)
+API.md                  Endpoints, decisiones y codigos de error de la API
+api.http                Solicitudes listas para probar cada endpoint
 sql/
-  01_tablespaces.sql    Tablespaces y cuotas (corre como SYS)
-  02_ddl.sql            Esquema: secuencias, 17 tablas, índices, comentarios
+  01_tablespaces.sql    Tablespaces, cuotas y permisos de diagnostico (corre como SYS)
+  02_ddl.sql            Esquema: secuencias, 17 tablas, indices, comentarios
   03_carga.sql          Carga de datos: 12 municipios, 60 alojamientos,
                         400 habitaciones, 3.000 clientes, 25.000 reservas
-                        (2024-2026), ~47.000 líneas de servicio
-  04_consultas.sql      8 consultas analíticas (PIVOT, CUBE, RANK, LAG,
-                        variables de enlace, vista materializada, UNPIVOT
-                        y una consulta de negocio propuesta)
-  05_liquidacion_tabla.sql   Entrega 2: tabla LIQUIDACION_MENSUAL
-  06_pkg_turismo.sql         Entrega 2: paquete PKG_TURISMO (fn_valor_estadia,
-                             sp_liquidar_mes con cursor explicito con parametros)
-  07_liquidacion_pruebas.sql Entrega 2: ejecucion y cuadres de la liquidacion
-                             (se corre a mano, como 04)
+                        (2024-2026), ~47.000 lineas de servicio
+  04_consultas.sql      Entrega 1: 8 consultas analiticas (a mano)
+  05_auditoria_estructuras.sql  Entrega 2: temporadas 2027 y AUDITORIA_TARIFA
+  06_liquidacion_tabla.sql      Entrega 2: tabla LIQUIDACION_MENSUAL
+  07_pkg_turismo.sql            Entrega 2: paquete PKG_TURISMO
+  08_triggers.sql               Entrega 2: trg_rh_no_solape y trg_tarifa_auditoria
+  09_liquidacion_pruebas.sql    Entrega 2: liquidacion y cuadres (a mano)
+  10_pruebas.sql                Entrega 2: pruebas automaticas (a mano)
+  11_pkg_transacciones.sql      Entrega 3: reserva + pago atomicos (SAVEPOINT)
+  12_transacciones_demo.sql     Entrega 3: demo de rollback parcial/total (a mano)
+  13_pkg_concurrencia.sql       Entrega 3: paquete y vista del experimento
+  14_concurrencia_preparar.sql  Entrega 3: prepara cada escenario (a mano)
+  15_concurrencia_sesion.sql    Entrega 3: lo que corre cada sesion (a mano)
+  16_concurrencia_monitor.sql   Entrega 3: quien bloquea a quien (a mano)
+  17_indices.sql                Entrega 3: indices, planes y medicion (a mano)
+ENTREGA3.md             Documentacion y resultados de la Entrega 3
 docker-compose.yml      Contenedor de Oracle XE
 ```
 
-Los scripts `01`, `02` y `03` se ejecutan **automáticamente** la primera
-vez que se crea el contenedor (ver sección siguiente). `04_consultas.sql`
-se ejecuta a mano, cuando quieras consultar los datos ya cargados.
+Los scripts que crean objetos (`01`-`03`, `05`-`08`, `11` y `13`) se
+ejecutan **automáticamente** la primera vez que se crea el contenedor (ver
+sección siguiente). Los marcados "a mano" se ejecutan después, como
+`turismouq`; ver `ENTREGA3.md` para los de la Entrega 3.
 
 ## Requisitos
 
 - Docker y Docker Compose
 - JDK 17 o superior (con `javac`; no basta con el JRE)
+- Node.js 22.12+ o 24 y npm (solo para el frontend)
 
 ## Cómo levantar el proyecto
 
@@ -57,10 +72,19 @@ se ejecuta a mano, cuando quieras consultar los datos ya cargados.
    ```bash
    ./mvnw spring-boot:run
    ```
-   Queda escuchando en `http://localhost:8080`.
+   Queda escuchando en `http://localhost:8080`. Los endpoints están en
+   [`API.md`](API.md) y se prueban con `api.http`.
 
-3. **Para detener:**
-   - La app: `Ctrl+C` en su terminal.
+3. **Frontend Angular** (en otra terminal):
+   ```bash
+   cd frontend
+   npm install        # solo la primera vez
+   npm start          # http://localhost:4200
+   ```
+   `ng serve` reenvía `/api` al backend (`proxy.conf.json`).
+
+4. **Para detener:**
+   - La app y el frontend: `Ctrl+C` en su terminal.
    - La base de datos: `docker compose down` (conserva los datos) o
      `docker compose down -v` (borra el volumen también).
 

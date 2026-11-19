@@ -1,0 +1,130 @@
+<section class="pagina">
+  <header class="encabezado">
+    <div>
+      <span class="antetitulo">Entrega 3 · Transacciones y concurrencia</span>
+      <h1>Monitor de transacciones</h1>
+      <p>Sesiones de la base y quién bloquea a quién, la bitácora de cada intento de reserva con pago y una prueba de
+        concurrencia desde la API.</p>
+    </div>
+  </header>
+
+  <article class="tarjeta">
+    <header>
+      <div><h2>Sesiones y bloqueos</h2><p>Vista V_MONITOR_BLOQUEOS (V$SESSION + V$LOCK). Abra dos sesiones con 15_concurrencia_sesion.sql y mírelas aquí.</p></div>
+      <button class="boton suave pequeno" type="button" (click)="alternarVivo()" [attr.aria-pressed]="enVivo()">
+        <span class="material-symbols-rounded" aria-hidden="true">{{ enVivo() ? 'pause' : 'play_arrow' }}</span>
+        {{ enVivo() ? 'En vivo (cada 3 s)' : 'Pausado' }}
+      </button>
+    </header>
+    @if (bloqueadas().length) {
+      <div class="alerta" role="status">
+        <span class="material-symbols-rounded" aria-hidden="true">lock_clock</span>
+        {{ bloqueadas().length }} {{ bloqueadas().length === 1 ? 'sesión espera' : 'sesiones esperan' }} un bloqueo de fila (enq: TX - row lock contention).
+      </div>
+    }
+    @if (bloqueos.error(); as e) { <app-aviso [error]="e" /> }
+    @else if (!bloqueos.datos()) { <app-cargando [filas]="4" /> }
+    @else if (bloqueos.datos()!.length) {
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead><tr><th>SID</th><th>Estado</th><th>Sesión</th><th>Bloqueada por</th><th>Evento</th><th class="der">Espera (s)</th><th>Tabla</th></tr></thead>
+          <tbody>
+            @for (b of bloqueos.datos(); track b.sid) {
+              <tr [class.bloq]="b.bloqueadaPor !== null">
+                <td class="num">{{ b.sid }},{{ b.serial }}</td>
+                <td><span class="etiqueta" [class.ok]="b.status === 'ACTIVE'">{{ b.status }}</span></td>
+                <td>{{ b.sesion ?? '—' }}</td>
+                <td>
+                  @if (b.bloqueadaPor !== null) {
+                    <span class="etiqueta error"><span class="material-symbols-rounded" aria-hidden="true">lock</span>SID {{ b.bloqueadaPor }}</span>
+                  } @else { — }
+                </td>
+                <td class="evento">{{ b.evento }}</td>
+                <td class="der">{{ b.segEsperando }}</td>
+                <td>{{ b.tablaEsperada ?? '—' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <app-vacio icono="lan" titulo="No hay otras sesiones de turismouq" />
+    }
+  </article>
+
+  <article class="tarjeta">
+    <header>
+      <div>
+        <h2>Prueba de concurrencia</h2>
+        <p>Dos solicitudes simultáneas reservan la misma habitación. <code>SELECT … FOR UPDATE</code> en sp_crear_reserva
+          deja pasar solo a una. Crea una reserva PENDIENTE real.</p>
+      </div>
+    </header>
+    <form class="filtros" (ngSubmit)="lanzarCarrera()">
+      <label class="campo"><span>Llegada</span><input class="control" type="date" name="ci" [ngModel]="checkin()" (ngModelChange)="checkin.set($event)" /></label>
+      <label class="campo"><span>Salida</span><input class="control" type="date" name="co" [ngModel]="checkout()" (ngModelChange)="checkout.set($event)" /></label>
+      <label class="campo"><span>Cliente A</span><input class="control" type="number" name="a" [ngModel]="clienteA()" (ngModelChange)="clienteA.set(+$event)" /></label>
+      <label class="campo"><span>Cliente B</span><input class="control" type="number" name="b" [ngModel]="clienteB()" (ngModelChange)="clienteB.set(+$event)" /></label>
+      <button class="boton acento" type="submit" [disabled]="carrera.cargando()">
+        <span class="material-symbols-rounded" aria-hidden="true">bolt</span>Lanzar dos reservas a la vez
+      </button>
+    </form>
+    @if (carrera.cargando()) { <app-cargando [filas]="2" /> }
+    @if (carrera.error(); as e) { <app-aviso [error]="e" /> }
+    @if (carrera.datos(); as c) {
+      <p class="hab">Habitación disputada: <strong>{{ c.habitacion }}</strong></p>
+      <div class="intentos">
+        @for (i of c.intentos; track i.cliente) {
+          <div class="intento" [class.gano]="i.ok">
+            <span class="material-symbols-rounded" aria-hidden="true">{{ i.ok ? 'check_circle' : 'block' }}</span>
+            <div>
+              <strong>Cliente {{ i.cliente }} · {{ i.ok ? 'HTTP 201' : 'HTTP 409' }}</strong>
+              <p>{{ i.texto }} @if (i.codigo) { <code>ORA-{{ i.codigo }}</code> }</p>
+              @if (i.idReserva) { <a [routerLink]="['/reservas', i.idReserva]">Ver reserva</a> }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </article>
+
+  <article class="tarjeta">
+    <header>
+      <div><h2>Bitácora de reserva con pago</h2><p>LOG_TRANSACCION: se escribe con PRAGMA AUTONOMOUS_TRANSACTION, así que conserva también los intentos que hicieron ROLLBACK.</p></div>
+      <button class="boton fantasma pequeno" type="button" (click)="recargarBitacora()">
+        <span class="material-symbols-rounded" aria-hidden="true">refresh</span>Actualizar
+      </button>
+    </header>
+    @if (bitacora.cargando()) { <app-cargando [filas]="4" /> }
+    @else if (bitacora.error(); as e) { <app-aviso [error]="e" /> }
+    @else if (bitacora.datos()?.length) {
+      <div class="tabla-contenedor tabla-alta">
+        <table class="tabla">
+          <thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Habitaciones</th><th>Resultado</th><th>Paso</th><th>Reserva / pago</th><th>Mensaje</th></tr></thead>
+          <tbody>
+            @for (l of bitacora.datos(); track l.idLog) {
+              <tr>
+                <td class="num">{{ l.idLog }}</td>
+                <td>{{ l.fecha | fecha: 'hora' }}</td>
+                <td>{{ l.idCliente ?? '—' }}</td>
+                <td>{{ l.habitaciones ?? '—' }}</td>
+                <td>
+                  <span class="etiqueta" [class.ok]="l.resultado === 'COMPLETA'" [class.aviso]="l.resultado === 'ROLLBACK_PARCIAL'" [class.error]="l.resultado === 'ROLLBACK_TOTAL'">
+                    {{ l.resultado }}
+                  </span>
+                </td>
+                <td>{{ l.paso ?? '—' }}</td>
+                <td>
+                  @if (l.idReserva) { <a [routerLink]="['/reservas', l.idReserva]">#{{ l.idReserva }}</a> / {{ l.idPago }} } @else { — }
+                </td>
+                <td class="mensaje">{{ l.mensaje ?? '' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <app-vacio icono="receipt_long" titulo="Sin intentos registrados" texto="Haga una reserva con pago desde 'Nueva reserva' y aparecerá aquí." />
+    }
+  </article>
+</section>

@@ -15,6 +15,9 @@ services:
       ORACLE_PASSWORD: "TurismoUQ2026*"        # password de SYS/SYSTEM
       APP_USER: "turismouq"                    # esquema del proyecto
       APP_USER_PASSWORD: "TurismoUQ2026*"
+      # Hora de Colombia (UTC-5) para SYSDATE / SYSTIMESTAMP. Oracle toma la
+      # zona horaria del sistema operativo del servidor, no la del cliente.
+      TZ: "America/Bogota"
     volumes:
       - turismouq-data:/opt/oracle/oradata
       # Scripts .sql que se corren SOLO la primera vez que se crea la BD

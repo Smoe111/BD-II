@@ -1,0 +1,15 @@
+code { font-size: 0.8rem; background: var(--crema-200); padding: 1px 5px; border-radius: 4px; }
+.alerta { display: flex; gap: 8px; align-items: center; padding: 10px 14px; margin-bottom: 12px; border-radius: var(--radio-s);
+  background: var(--error-fondo); color: var(--error); font-weight: 600; font-size: 0.88rem; }
+tr.bloq td { background: #fdf3f0; }
+.evento { font-size: 0.8rem; color: var(--cafe-700); }
+.mensaje { font-size: 0.78rem; color: var(--cafe-700); max-width: 380px; }
+.filtros { margin-bottom: 14px; }
+.hab { font-size: 0.88rem; margin-bottom: 10px; }
+.intentos { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.intento {
+  display: flex; gap: 12px; padding: 14px; border-radius: var(--radio-m); border: 1px solid #f0c4b8; background: var(--error-fondo);
+  > .material-symbols-rounded { font-size: 28px; color: var(--error); }
+  &.gano { border-color: var(--verde-200); background: var(--ok-fondo); > .material-symbols-rounded { color: var(--ok); } }
+  p { font-size: 0.86rem; color: var(--cafe-800); margin: 2px 0 4px; }
+}

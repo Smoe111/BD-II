@@ -1,0 +1,10 @@
+.dia { display: flex; gap: 8px; align-items: center; input { width: 170px; } }
+.resumen { display: flex; gap: 6px; flex-wrap: wrap; }
+.total { font-family: var(--fuente-titulo); font-size: 1.4rem; color: var(--verde-700); }
+code { font-size: 0.78rem; background: var(--crema-200); padding: 1px 5px; border-radius: 4px; }
+.agenda {
+  list-style: none; margin: 0; padding: 0; max-height: 360px; overflow: auto;
+  li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--crema-200); font-size: 0.88rem; }
+  li:last-child { border-bottom: 0; }
+  span:last-child { color: var(--cafe-600); white-space: nowrap; }
+}

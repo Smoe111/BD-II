@@ -1,0 +1,80 @@
+<a class="saltar" href="#contenido">Saltar al contenido</a>
+
+<aside class="menu" [class.abierto]="menuAbierto()" aria-label="Navegación principal">
+  <a class="marca" routerLink="/">
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <ellipse cx="32" cy="32" rx="14" ry="19" transform="rotate(-28 32 32)" fill="#b8432a" />
+      <path d="M25 17c9 6 5 24 14 30" stroke="#5c1a0d" stroke-width="3.5" fill="none" stroke-linecap="round" />
+    </svg>
+    <span>
+      <strong>TurismoUQ</strong>
+      <small>Paisaje Cultural Cafetero</small>
+    </span>
+  </a>
+
+  <nav>
+    @for (grupo of grupos; track grupo.titulo) {
+      <p class="grupo">{{ grupo.titulo }}</p>
+      <ul>
+        @for (e of grupo.enlaces; track e.ruta) {
+          <li>
+            <a [routerLink]="e.ruta" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: !!e.exacto }"
+               ariaCurrentWhenActive="page">
+              <span class="material-symbols-rounded" aria-hidden="true">{{ e.icono }}</span>{{ e.texto }}
+            </a>
+          </li>
+        }
+      </ul>
+    }
+  </nav>
+
+  <!-- Silueta de la cordillera con palmas de cera -->
+  <svg class="paisaje" viewBox="0 0 264 120" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0 70 C40 40 70 60 100 45 S160 20 200 42 S250 55 264 40 V120 H0Z" fill="#17633e" />
+    <path d="M0 92 C50 70 90 88 140 74 S220 66 264 80 V120 H0Z" fill="#114c30" />
+    <g stroke="#0c3823" stroke-width="2" fill="none" stroke-linecap="round">
+      <path d="M210 98 L212 48" /><path d="M212 48 c-8 -2 -14 2 -18 8 M212 48 c8 -3 14 0 18 6 M212 48 c-4 -6 -10 -8 -16 -6 M212 48 c4 -7 10 -8 16 -5" />
+      <path d="M232 100 L233 62" /><path d="M233 62 c-6 -1 -10 2 -13 6 M233 62 c6 -2 10 0 13 5 M233 62 c-3 -5 -8 -6 -12 -4 M233 62 c3 -5 8 -6 12 -3" />
+    </g>
+  </svg>
+</aside>
+
+@if (menuAbierto()) {
+  <div class="velo" (click)="menuAbierto.set(false)" aria-hidden="true"></div>
+}
+
+<div class="principal">
+  <header class="barra">
+    <button type="button" class="boton suave icono hamburguesa" (click)="menuAbierto.set(!menuAbierto())"
+            [attr.aria-expanded]="menuAbierto()" aria-label="Abrir menú">
+      <span class="material-symbols-rounded" aria-hidden="true">menu</span>
+    </button>
+    <p class="lema">Armenia · Salento · Filandia · Calarcá · Quimbaya y más</p>
+
+    <form class="buscar-reserva" role="search" (submit)="buscarReserva($event, numero)">
+      <span class="material-symbols-rounded" aria-hidden="true">confirmation_number</span>
+      <label class="sr-only" for="numero-reserva">Número de reserva</label>
+      <input #numero id="numero-reserva" type="number" min="1" inputmode="numeric" placeholder="N.º de reserva" />
+      <button type="submit" class="boton pequeno">Ver</button>
+    </form>
+
+    <label class="operador">
+      <span class="material-symbols-rounded" aria-hidden="true">badge</span>
+      <span class="sr-only">Funcionario en turno</span>
+      <select class="control" (change)="cambiarOperador($event)" title="Funcionario que registra las operaciones">
+        @for (u of operadores.personal(); track u.idUsuarioSistema) {
+          <option [value]="u.idUsuarioSistema" [selected]="u.idUsuarioSistema === operadores.operador()?.idUsuarioSistema"
+                  [disabled]="u.activo !== 'S'">
+            {{ u.usuario }} · {{ u.rol }}
+          </option>
+        } @empty {
+          <option>Sin conexión con la API</option>
+        }
+      </select>
+    </label>
+  </header>
+
+  <main id="contenido" tabindex="-1">
+    <router-outlet />
+  </main>
+</div>

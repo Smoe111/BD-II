@@ -1,0 +1,177 @@
+### TurismoUQ · coleccion de solicitudes (IntelliJ HTTP Client / VS Code REST Client)
+### Requiere: docker compose up -d  y  ./mvnw spring-boot:run
+
+@base = http://localhost:8080
+
+### ---------------- Catalogo ----------------
+GET {{base}}/api/municipios
+
+###
+GET {{base}}/api/alojamientos?municipio=12
+
+###
+GET {{base}}/api/alojamientos/5
+
+### Habitaciones libres para 4 huespedes en Salento, fin de anio
+GET {{base}}/api/habitaciones/disponibles?checkin=2026-12-29&checkout=2027-01-03&huespedes=4&municipio=12
+
+### Cotizacion: estadia que cruza dos temporadas (decembrina 45 % + enero 35 %)
+GET {{base}}/api/habitaciones/2/cotizacion?checkin=2026-12-29&checkout=2027-01-03
+
+### Noches sin temporada -> 422 (ORA-20022)
+GET {{base}}/api/habitaciones/2/cotizacion?checkin=2029-01-01&checkout=2029-01-03
+
+###
+GET {{base}}/api/servicios
+
+###
+GET {{base}}/api/temporadas?anio=2027
+
+### ---------------- Clientes ----------------
+GET {{base}}/api/clientes?apellido=rest
+
+###
+GET {{base}}/api/clientes/10/reservas
+
+### ---------------- Reservas ----------------
+### Crear reserva PENDIENTE (sp_crear_reserva)
+POST {{base}}/api/reservas
+Content-Type: application/json
+
+{ "idCliente": 10, "idUsuarioSistema": 1,
+  "checkin": "2027-02-10", "checkout": "2027-02-13",
+  "numHuespedes": 2, "habitaciones": [49] }
+
+### Misma habitacion y noches -> 409 (ORA-20047)
+POST {{base}}/api/reservas
+Content-Type: application/json
+
+{ "idCliente": 20, "idUsuarioSistema": 1,
+  "checkin": "2027-02-11", "checkout": "2027-02-12",
+  "numHuespedes": 1, "habitaciones": [49] }
+
+### Capacidad superada -> 422 (ORA-20046)
+POST {{base}}/api/reservas
+Content-Type: application/json
+
+{ "idCliente": 20, "idUsuarioSistema": 1,
+  "checkin": "2027-02-11", "checkout": "2027-02-12",
+  "numHuespedes": 9, "habitaciones": [50] }
+
+### Reserva + servicios + pago -> COMPLETA
+POST {{base}}/api/reservas/con-pago
+Content-Type: application/json
+
+{ "idCliente": 30, "idUsuarioSistema": 1,
+  "checkin": "2027-02-10", "checkout": "2027-02-13", "numHuespedes": 2,
+  "habitaciones": [50],
+  "servicios": [ { "idServicio": 2, "cantidad": 2 }, { "idServicio": 16, "cantidad": 2 } ],
+  "valorPago": 800000, "metodoPago": "PSE" }
+
+### Servicio 999 no existe -> ROLLBACK_PARCIAL (reserva y pago se guardan)
+POST {{base}}/api/reservas/con-pago
+Content-Type: application/json
+
+{ "idCliente": 30, "idUsuarioSistema": 1,
+  "checkin": "2027-02-14", "checkout": "2027-02-16", "numHuespedes": 2,
+  "habitaciones": [50],
+  "servicios": [ { "idServicio": 3, "cantidad": 1 }, { "idServicio": 999, "cantidad": 1 } ],
+  "valorPago": 200000, "metodoPago": "TARJETA_CREDITO" }
+
+### Anticipo insuficiente -> 400, ROLLBACK TOTAL (ver "salida")
+POST {{base}}/api/reservas/con-pago
+Content-Type: application/json
+
+{ "idCliente": 30, "idUsuarioSistema": 1,
+  "checkin": "2027-02-10", "checkout": "2027-02-13", "numHuespedes": 2,
+  "habitaciones": [51], "valorPago": 1000, "metodoPago": "EFECTIVO" }
+
+###
+GET {{base}}/api/reservas/9355
+
+### Abono al saldo de una reserva (sp_registrar_abono, FOR UPDATE)
+POST {{base}}/api/reservas/9355/pagos
+Content-Type: application/json
+
+{ "valor": 50000, "metodoPago": "EFECTIVO" }
+
+### Pago a una reserva cancelada -> 422 (ORA-20055)
+POST {{base}}/api/reservas/4/pagos
+Content-Type: application/json
+
+{ "valor": 1000, "metodoPago": "PSE" }
+
+### ---------------- Liquidacion ----------------
+POST {{base}}/api/liquidaciones
+Content-Type: application/json
+
+{ "anio": 2026, "mes": 8, "idAlojamiento": 5 }
+
+### Mes no cerrado -> 400 (ORA-20031)
+POST {{base}}/api/liquidaciones
+Content-Type: application/json
+
+{ "anio": 2026, "mes": 12 }
+
+###
+GET {{base}}/api/liquidaciones?anio=2026&mes=8
+
+### ---------------- Tarifas y auditoria ----------------
+GET {{base}}/api/tarifas
+
+### Cambio de tarifa: el trigger registra usuarioApp = admin01
+PUT {{base}}/api/tarifas/1
+Content-Type: application/json
+
+{ "valor": 181000, "usuario": "admin01" }
+
+### Dejarla como estaba
+PUT {{base}}/api/tarifas/1
+Content-Type: application/json
+
+{ "valor": 146000, "usuario": "admin01" }
+
+###
+GET {{base}}/api/tarifas/1/auditoria
+
+### ---------------- Reportes (Entrega 1) ----------------
+GET {{base}}/api/reportes/ocupacion?anio=2025
+
+###
+GET {{base}}/api/reportes/ingresos
+
+###
+GET {{base}}/api/reportes/top-alojamientos?top=3
+
+###
+GET {{base}}/api/reportes/variacion-mensual
+
+###
+GET {{base}}/api/reportes/reservas?desde=2025-06-15&hasta=2025-07-31
+
+###
+GET {{base}}/api/reportes/ocupacion-mensual?anio=2025&municipio=12
+
+###
+POST {{base}}/api/reportes/ocupacion-mensual/refresco
+
+###
+GET {{base}}/api/reportes/estado-financiero?cliente=10
+
+###
+GET {{base}}/api/reportes/cartera
+
+### ---------------- Operacion (indices, Entrega 3) ----------------
+GET {{base}}/api/operacion/llegadas?fecha=2026-12-18
+
+###
+GET {{base}}/api/operacion/cierre-caja?fecha=2025-12-20
+
+###
+GET {{base}}/api/operacion/agenda-servicios?fecha=2025-12-20
+
+### ---------------- Monitoreo (Entrega 3) ----------------
+GET {{base}}/api/admin/bloqueos
+
+###
+GET {{base}}/api/admin/log-transacciones?limite=20

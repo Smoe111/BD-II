@@ -47,13 +47,18 @@ CREATE OR REPLACE PACKAGE pkg_turismo AS
                              p_mes            IN NUMBER,
                              p_id_alojamiento IN NUMBER DEFAULT NULL);
 
+  -- p_confirmar (Entrega 3): TRUE = hace COMMIT al terminar (uso normal).
+  -- FALSE = deja la reserva SIN confirmar para que la confirme el proceso
+  -- que la llamo; asi pkg_transacciones.sp_reservar_y_pagar mete reserva
+  -- y pago en UNA sola transaccion.
   PROCEDURE sp_crear_reserva (p_id_cliente         IN  NUMBER,
                               p_id_usuario_sistema IN  NUMBER,
                               p_checkin            IN  DATE,
                               p_checkout           IN  DATE,
                               p_num_huespedes      IN  NUMBER,
                               p_habitaciones       IN  VARCHAR2,
-                              p_id_reserva         OUT NUMBER);
+                              p_id_reserva         OUT NUMBER,
+                              p_confirmar          IN  BOOLEAN DEFAULT TRUE);
 
 END pkg_turismo;
 /
@@ -373,7 +378,8 @@ CREATE OR REPLACE PACKAGE BODY pkg_turismo AS
                               p_checkout           IN  DATE,
                               p_num_huespedes      IN  NUMBER,
                               p_habitaciones       IN  VARCHAR2,
-                              p_id_reserva         OUT NUMBER)
+                              p_id_reserva         OUT NUMBER,
+                              p_confirmar          IN  BOOLEAN DEFAULT TRUE)
   IS
     TYPE t_n IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
  
@@ -601,7 +607,12 @@ CREATE OR REPLACE PACKAGE BODY pkg_turismo AS
                 v_previo(i), v_valor(i));
       END LOOP;
  
-      COMMIT;
+      -- Un procedimiento no debe confirmar una transaccion que pertenece
+      -- a un proceso mas grande: si lo llama sp_reservar_y_pagar, el
+      -- COMMIT lo hace el llamador cuando el pago tambien quedo listo.
+      IF p_confirmar THEN
+        COMMIT;
+      END IF;
  
     EXCEPTION
       WHEN OTHERS THEN

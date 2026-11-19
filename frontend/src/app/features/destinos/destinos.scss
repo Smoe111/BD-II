@@ -1,0 +1,37 @@
+.municipios {
+  display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  button {
+    display: grid; text-align: left; gap: 2px; padding: 12px 14px; border-radius: var(--radio-m); cursor: pointer;
+    font: inherit; color: inherit; background: var(--crema-50); border: var(--borde);
+    transition: border-color var(--transicion), transform var(--transicion);
+    &:hover { border-color: var(--verde-300); transform: translateY(-1px); }
+    &.activo { background: var(--verde-700); border-color: var(--verde-700); color: #fff; small { color: var(--verde-100); } }
+    strong { font-family: var(--fuente-titulo); font-size: 1.02rem; }
+    small { font-size: 0.75rem; color: var(--cafe-600); }
+  }
+}
+.tarjetas { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }
+.alojamiento {
+  display: flex; flex-direction: column; border-radius: var(--radio-l); overflow: hidden; text-decoration: none; color: inherit;
+  background: var(--crema-50); border: var(--borde); box-shadow: var(--sombra-1);
+  transition: box-shadow var(--transicion), transform var(--transicion);
+  &:hover { box-shadow: var(--sombra-2); transform: translateY(-2px); }
+  &.inactivo { opacity: 0.7; }
+}
+.foto {
+  position: relative; height: 120px; display: grid; place-items: center; color: rgb(255 255 255 / 92%);
+  background: linear-gradient(160deg, var(--verde-400), var(--verde-700));
+  .material-symbols-rounded { font-size: 48px; font-variation-settings: 'FILL' 1, 'wght' 300; }
+  .tipo { position: absolute; left: 12px; bottom: 10px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; background: rgb(0 0 0 / 22%); padding: 3px 8px; border-radius: 999px; }
+  &[data-tipo*='Finca'] { background: linear-gradient(160deg, #c9894a, #7a4a26); }
+  &[data-tipo*='Glamping'] { background: linear-gradient(160deg, #5d8a6e, #2c4f3c); }
+  &[data-tipo*='Hostal'] { background: linear-gradient(160deg, #c27c0e, #8a5606); }
+  &[data-tipo*='Eco'] { background: linear-gradient(160deg, #3f9566, #17633e); }
+}
+.texto {
+  padding: 16px; display: grid; gap: 6px;
+  p { font-size: 0.82rem; color: var(--cafe-600); display: flex; gap: 4px; align-items: center; }
+  p .material-symbols-rounded { font-size: 16px; color: var(--cereza-500); }
+}
+.pie { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; margin-top: 4px; }
+.estrellas { color: var(--ambar-500); .material-symbols-rounded { font-size: 16px; font-variation-settings: 'FILL' 1; } }
