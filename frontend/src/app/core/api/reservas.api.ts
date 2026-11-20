@@ -11,7 +11,7 @@ import { Abono, CrearReserva, ReservaDetalle, ReservarYPagar, ResultadoAbono, Re
 export class ReservasApi {
   private readonly http = inject(HttpClient);
 
-  /** pkg_turismo.sp_crear_reserva: reserva PENDIENTE sin pago. */
+  /** pkg_transacciones.sp_reservar_sin_pago (sp_crear_reserva + bitacora): reserva PENDIENTE sin pago. */
   crear(solicitud: CrearReserva): Observable<ReservaDetalle> {
     return this.http.post<ReservaDetalle>('/api/reservas', solicitud);
   }

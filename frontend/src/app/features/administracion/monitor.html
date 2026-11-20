@@ -90,7 +90,7 @@
 
   <article class="tarjeta">
     <header>
-      <div><h2>Bitácora de reserva con pago</h2><p>LOG_TRANSACCION: se escribe con PRAGMA AUTONOMOUS_TRANSACTION, así que conserva también los intentos que hicieron ROLLBACK.</p></div>
+      <div><h2>Bitácora de reservas y pagos</h2><p>LOG_TRANSACCION: reservas con pago, reservas sin pago y abonos. Se escribe con PRAGMA AUTONOMOUS_TRANSACTION, así que conserva también los intentos que hicieron ROLLBACK.</p></div>
       <button class="boton fantasma pequeno" type="button" (click)="recargarBitacora()">
         <span class="material-symbols-rounded" aria-hidden="true">refresh</span>Actualizar
       </button>
@@ -109,13 +109,13 @@
                 <td>{{ l.idCliente ?? '—' }}</td>
                 <td>{{ l.habitaciones ?? '—' }}</td>
                 <td>
-                  <span class="etiqueta" [class.ok]="l.resultado === 'COMPLETA'" [class.aviso]="l.resultado === 'ROLLBACK_PARCIAL'" [class.error]="l.resultado === 'ROLLBACK_TOTAL'">
+                  <span class="etiqueta" [class.ok]="l.resultado === 'COMPLETA' || l.resultado === 'ABONO'" [class.info]="l.resultado === 'SIN_PAGO'" [class.aviso]="l.resultado === 'ROLLBACK_PARCIAL'" [class.error]="l.resultado === 'ROLLBACK_TOTAL'">
                     {{ l.resultado }}
                   </span>
                 </td>
                 <td>{{ l.paso ?? '—' }}</td>
                 <td>
-                  @if (l.idReserva) { <a [routerLink]="['/reservas', l.idReserva]">#{{ l.idReserva }}</a> / {{ l.idPago }} } @else { — }
+                  @if (l.idReserva) { <a [routerLink]="['/reservas', l.idReserva]">#{{ l.idReserva }}</a> / {{ l.idPago ?? '—' }} } @else { — }
                 </td>
                 <td class="mensaje">{{ l.mensaje ?? '' }}</td>
               </tr>

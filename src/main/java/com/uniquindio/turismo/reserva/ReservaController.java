@@ -28,7 +28,7 @@ public class ReservaController {
         this.servicio = servicio;
     }
 
-    /** Reserva sin pago (queda PENDIENTE): pkg_turismo.sp_crear_reserva. */
+    /** Reserva sin pago (queda PENDIENTE): pkg_transacciones.sp_reservar_sin_pago (sp_crear_reserva + bitacora). */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ReservaDetalle crear(@Valid @RequestBody CrearReserva solicitud) {

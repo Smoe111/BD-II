@@ -12,7 +12,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
         <div>
           <span class="antetitulo">Reportes gerenciales</span>
           <h1>Así se mueve el turismo en el Quindío</h1>
-          <p>Cada pestaña es una de las consultas analíticas de la Entrega 1 (04_consultas.sql), servida por la API.</p>
+          <p>Cada pestaña es una de las consultas analíticas de 04_consultas.sql, servida por la API.</p>
         </div>
       </header>
       <nav class="pestanas" aria-label="Reportes">
@@ -32,5 +32,6 @@ export class ReportesComponent {
     { ruta: 'reservas', texto: '5 · Reservas por fechas' },
     { ruta: 'ocupacion-mensual', texto: '6 · Vista materializada' },
     { ruta: 'cartera', texto: '8 · Cartera' },
+    { ruta: 'temporada-alta', texto: '9 · Temporada alta' },
   ];
 }

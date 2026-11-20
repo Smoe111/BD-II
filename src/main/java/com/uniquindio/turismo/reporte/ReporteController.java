@@ -19,8 +19,9 @@ import com.uniquindio.turismo.comun.Filas;
 import com.uniquindio.turismo.comun.Plsql;
 
 /**
- * Las 8 consultas de analisis de la Entrega 1 (sql/04_consultas.sql)
- * expuestas como reportes. Las columnas salen en camelCase.
+ * Las consultas de analisis de sql/04_consultas.sql (las 8 de la
+ * Entrega 1 y la 9, habitaciones por tipo de temporada) expuestas como
+ * reportes. Las columnas salen en camelCase.
  */
 @RestController
 @RequestMapping("/api/reportes")
@@ -245,5 +246,80 @@ public class ReporteController {
                  GROUP BY m.id_municipio, m.nombre
                  ORDER BY cartera_pendiente DESC
                 """).query().listOfRows());
+    }
+
+    /**
+     * Tipo de temporada deducido del porcentaje (TEMPORADA no tiene columna
+     * de tipo): recargo = ALTA, 0 = BAJA, negativo = DESCUENTO. Lo comparten
+     * la consulta 9 y la lista de temporadas del filtro.
+     */
+    private static final String TIPO_TEMPORADA = """
+            CASE WHEN t.porcentaje > 0 THEN 'ALTA'
+                 WHEN t.porcentaje < 0 THEN 'DESCUENTO'
+                 ELSE 'BAJA' END""";
+
+    private static final List<String> TIPOS_TEMPORADA = List.of("ALTA", "BAJA", "DESCUENTO");
+
+    /** Temporadas distintas (por nombre) con su tipo, para el filtro de la consulta 9. */
+    @GetMapping("/temporadas")
+    public List<Map<String, Object>> temporadas() {
+        return Filas.json(jdbc.sql("""
+                SELECT DISTINCT t.nombre, t.porcentaje, %s AS tipo
+                  FROM temporada t
+                 ORDER BY t.porcentaje DESC, t.nombre
+                """.formatted(TIPO_TEMPORADA)).query().listOfRows());
+    }
+
+    /**
+     * 9. Habitaciones con mas reservas en un tipo de temporada (y, si se
+     * indica, en una temporada concreta). Cada estadia cuenta en la
+     * temporada de su check-in; si varias la contienen gana la de rango
+     * mas corto (criterio de V_RH_TEMPORADA). Sin canceladas. DENSE_RANK
+     * conserva los empates.
+     */
+    @GetMapping("/habitaciones-temporada")
+    public List<Map<String, Object>> habitacionesPorTemporada(
+            @RequestParam(defaultValue = "ALTA") String tipo,
+            @RequestParam(required = false) String temporada,
+            @RequestParam(defaultValue = "5") int top) {
+        String tipoNormalizado = tipo.strip().toUpperCase();
+        if (!TIPOS_TEMPORADA.contains(tipoNormalizado)) {
+            throw ErrorNegocio.solicitudInvalida("'tipo' debe ser ALTA, BAJA o DESCUENTO");
+        }
+        String nombre = temporada == null || temporada.isBlank() ? null : temporada.strip();
+        return Filas.json(jdbc.sql("""
+                WITH rh_temporada AS (
+                  SELECT rh.id_reserva, rh.id_habitacion, rh.valor_reserva,
+                         t.nombre AS temporada, %s AS tipo_temporada,
+                         ROW_NUMBER() OVER (PARTITION BY rh.id_reserva, rh.id_habitacion
+                                            ORDER BY (t.fecha_fin - t.fecha_inicio)) AS rn
+                    FROM reserva_habitacion rh
+                    JOIN reserva r   ON r.id_reserva = rh.id_reserva
+                    JOIN temporada t ON rh.fecha_checkin BETWEEN t.fecha_inicio AND t.fecha_fin
+                   WHERE r.estado <> 'CANCELADA'),
+                conteo AS (
+                  SELECT id_habitacion,
+                         COUNT(DISTINCT id_reserva) AS cantidad_reservas,
+                         SUM(valor_reserva)         AS ingreso_total,
+                         DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT id_reserva) DESC) AS puesto
+                    FROM rh_temporada
+                   WHERE rn = 1
+                     AND tipo_temporada = :tipo
+                     AND (:temporada IS NULL OR UPPER(temporada) = UPPER(:temporada))
+                   GROUP BY id_habitacion)
+                SELECT c.puesto, h.id_habitacion, h.numero_habitacion,
+                       a.id_alojamiento, a.nombre AS alojamiento, m.nombre AS municipio,
+                       c.cantidad_reservas, c.ingreso_total
+                  FROM conteo c
+                  JOIN habitacion h  ON h.id_habitacion  = c.id_habitacion
+                  JOIN alojamiento a ON a.id_alojamiento = h.id_alojamiento
+                  JOIN municipio m   ON m.id_municipio   = a.id_municipio
+                 WHERE c.puesto <= :top
+                 ORDER BY c.puesto, h.id_habitacion
+                """.formatted(TIPO_TEMPORADA))
+                .param("tipo", tipoNormalizado)
+                .param("temporada", nombre, Types.VARCHAR)
+                .param("top", Math.max(1, Math.min(top, 50)))
+                .query().listOfRows());
     }
 }

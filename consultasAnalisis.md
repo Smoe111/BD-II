@@ -309,3 +309,77 @@ ORDER BY cartera_pendiente DESC;
 | Filandia | 2615 | 2588300000 | 2467400000 | 120900000 | 4.67 |
 | Quimbaya | 2190 | 2013700000 | 1921500000 | 92200000 | 4.58 |
 | La Tebaida | 1460 | 1284600000 | 1226300000 | 58300000 | 4.54 |
+
+---
+## 9. Habitación con más Reservas en Temporada Alta (Tipo de Temporada Dinámico)
+
+### Pregunta de Negocio:
+*¿Cuál fue la habitación con más reservas en temporada alta?* El tipo de temporada es un parámetro, así que la misma consulta responde también para temporada baja o para una temporada puntual (por ejemplo, Semana Santa).
+
+`TEMPORADA` no tiene una columna de tipo: se deduce del `porcentaje` (recargo > 0 → **ALTA**, 0 → **BAJA**, < 0 → **DESCUENTO**). Una temporada nueva queda clasificada sola al insertarla. Cada estadía se asigna a la temporada de su check-in; si se solapan varias, gana la de rango más corto (mismo criterio de `V_RH_TEMPORADA`). No se cuentan reservas canceladas y `DENSE_RANK` conserva los empates.
+
+```sql
+VARIABLE tipo_temporada VARCHAR2(10)
+VARIABLE temporada      VARCHAR2(40)
+VARIABLE top            NUMBER
+
+EXEC :tipo_temporada := 'ALTA';   -- 'ALTA' | 'BAJA' | 'DESCUENTO'
+EXEC :temporada      := NULL;     -- opcional: 'Semana Santa', 'Temporada decembrina', ...
+EXEC :top            := 1;        -- cuantos puestos mostrar
+
+WITH rh_temporada AS (
+    SELECT
+        rh.id_reserva,
+        rh.id_habitacion,
+        rh.valor_reserva,
+        t.nombre AS temporada,
+        CASE
+            WHEN t.porcentaje > 0 THEN 'ALTA'
+            WHEN t.porcentaje < 0 THEN 'DESCUENTO'
+            ELSE 'BAJA'
+        END AS tipo_temporada,
+        ROW_NUMBER() OVER (
+            PARTITION BY rh.id_reserva, rh.id_habitacion
+            ORDER BY (t.fecha_fin - t.fecha_inicio) ASC
+        ) AS rn
+    FROM reserva_habitacion rh
+    JOIN reserva r   ON r.id_reserva = rh.id_reserva
+    JOIN temporada t ON rh.fecha_checkin BETWEEN t.fecha_inicio AND t.fecha_fin
+    WHERE r.estado <> 'CANCELADA'
+),
+conteo AS (
+    SELECT
+        id_habitacion,
+        COUNT(DISTINCT id_reserva) AS cantidad_reservas,
+        SUM(valor_reserva)         AS ingreso_total,
+        DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT id_reserva) DESC) AS puesto
+    FROM rh_temporada
+    WHERE rn = 1
+      AND tipo_temporada = UPPER(:tipo_temporada)
+      AND (:temporada IS NULL OR UPPER(temporada) = UPPER(:temporada))
+    GROUP BY id_habitacion
+)
+SELECT
+    c.puesto,
+    h.id_habitacion,
+    h.numero_habitacion,
+    a.nombre AS alojamiento,
+    m.nombre AS municipio,
+    c.cantidad_reservas,
+    c.ingreso_total
+FROM conteo c
+JOIN habitacion h  ON h.id_habitacion  = c.id_habitacion
+JOIN alojamiento a ON a.id_alojamiento = h.id_alojamiento
+JOIN municipio m   ON m.id_municipio   = a.id_municipio
+WHERE c.puesto <= :top
+ORDER BY c.puesto, h.id_habitacion;
+```
+### Ejemplo de salida
+`:tipo_temporada = 'ALTA'`, `:top = 1`
+
+| PUESTO | ID_HABITACION | NUMERO_HABITACION | ALOJAMIENTO | MUNICIPIO | CANTIDAD_RESERVAS | INGRESO_TOTAL |
+|---|---|---|---|---|---|---|
+| 1 | 351 | 108 | Hostal El Remanso | Salento | 48 | 20842250 |
+
+`:tipo_temporada = 'BAJA'` → habitación 104 de Finca El Barranquero (Circasia), 53 reservas.
+`:tipo_temporada = 'ALTA'`, `:temporada = 'Semana Santa'` → habitación 102 de Hotel La Palma de Cera (Armenia), 7 reservas.

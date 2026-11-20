@@ -19,7 +19,7 @@ public final class Dto {
     private Dto() {
     }
 
-    /** POST /api/reservas -> pkg_turismo.sp_crear_reserva */
+    /** POST /api/reservas -> pkg_transacciones.sp_reservar_sin_pago */
     public record CrearReserva(
             @NotNull Long idCliente,
             @NotNull Long idUsuarioSistema,

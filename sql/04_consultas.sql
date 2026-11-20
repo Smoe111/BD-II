@@ -1,6 +1,6 @@
 -- =====================================================================
 -- TurismoUQ · Bases de Datos II · Entrega 1
--- Script 04 · Consultas analiticas (8 requerimientos)
+-- Script 04 · Consultas analiticas (8 requerimientos + consulta 9)
 -- ---------------------------------------------------------------------
 -- EJECUTAR COMO: turismouq, despues de 01/02/03.
 --
@@ -14,10 +14,10 @@
 --      consulta que quieras (desde su comentario "-- N." hasta el ";"
 --      final) y ejecutar solo esa seleccion.
 --
--- La consulta 5 usa variables de enlace (VARIABLE + EXEC), una sintaxis
--- de SQL*Plus. Si la corres en una herramienta grafica (SQL Developer,
--- DBeaver) usa el dialogo de "bind variables" que te pida al ejecutar,
--- o reemplaza :fecha_inicio/:fecha_fin por fechas literales.
+-- Las consultas 5 y 9 usan variables de enlace (VARIABLE + EXEC), una
+-- sintaxis de SQL*Plus. Si las corres en una herramienta grafica (SQL
+-- Developer, DBeaver) usa el dialogo de "bind variables" que te pida al
+-- ejecutar, o reemplaza las variables por valores literales.
 -- =====================================================================
 
 SET PAGESIZE 100
@@ -301,6 +301,90 @@ JOIN municipio m ON m.id_municipio = rm.id_municipio
 WHERE r.estado <> 'CANCELADA'
 GROUP BY m.id_municipio, m.nombre
 ORDER BY cartera_pendiente DESC;
+
+-- =====================================================================
+-- 9. Habitacion con mas reservas por tipo de temporada (dinamica)
+-- ---------------------------------------------------------------------
+-- Pregunta de negocio: que habitacion tuvo mas reservas en temporada
+-- alta (o baja, o en una temporada puntual).
+--
+-- TEMPORADA no tiene columna "tipo": el tipo se deduce del porcentaje,
+-- que es lo que de verdad la distingue:
+--   porcentaje > 0  -> ALTA       (Semana Santa, decembrina, vacaciones,
+--                                  receso: tienen recargo)
+--   porcentaje = 0  -> BAJA
+--   porcentaje < 0  -> DESCUENTO
+-- Asi, una temporada nueva queda clasificada sola al insertarla en
+-- TEMPORADA; la consulta no se toca.
+--
+-- Cada estadia se asigna a la temporada de su check-in. Las temporadas
+-- se solapan (la baja cubre rangos largos que contienen a las altas);
+-- gana la de rango mas corto, el mismo criterio de V_RH_TEMPORADA.
+-- No cuenta reservas CANCELADAS. DENSE_RANK conserva los empates: si dos
+-- habitaciones tienen el mismo maximo, salen las dos con puesto 1.
+--
+-- Parametros (variables de enlace):
+--   :tipo_temporada  'ALTA' | 'BAJA' | 'DESCUENTO'
+--   :temporada       nombre de una temporada concreta (opcional, NULL =
+--                    todas las del tipo), p. ej. 'Semana Santa'
+--   :top             cuantos puestos mostrar (1 = solo la(s) primera(s))
+-- =====================================================================
+PROMPT
+PROMPT === 9. Habitacion con mas reservas por tipo de temporada ===
+VARIABLE tipo_temporada VARCHAR2(10)
+VARIABLE temporada      VARCHAR2(40)
+VARIABLE top            NUMBER
+
+EXEC :tipo_temporada := 'ALTA';
+EXEC :temporada      := NULL;
+EXEC :top            := 1;
+
+WITH rh_temporada AS (
+    SELECT
+        rh.id_reserva,
+        rh.id_habitacion,
+        rh.valor_reserva,
+        t.nombre AS temporada,
+        CASE
+            WHEN t.porcentaje > 0 THEN 'ALTA'
+            WHEN t.porcentaje < 0 THEN 'DESCUENTO'
+            ELSE 'BAJA'
+        END AS tipo_temporada,
+        ROW_NUMBER() OVER (
+            PARTITION BY rh.id_reserva, rh.id_habitacion
+            ORDER BY (t.fecha_fin - t.fecha_inicio) ASC
+        ) AS rn
+    FROM reserva_habitacion rh
+    JOIN reserva r   ON r.id_reserva = rh.id_reserva
+    JOIN temporada t ON rh.fecha_checkin BETWEEN t.fecha_inicio AND t.fecha_fin
+    WHERE r.estado <> 'CANCELADA'
+),
+conteo AS (
+    SELECT
+        id_habitacion,
+        COUNT(DISTINCT id_reserva) AS cantidad_reservas,
+        SUM(valor_reserva)         AS ingreso_total,
+        DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT id_reserva) DESC) AS puesto
+    FROM rh_temporada
+    WHERE rn = 1
+      AND tipo_temporada = UPPER(:tipo_temporada)
+      AND (:temporada IS NULL OR UPPER(temporada) = UPPER(:temporada))
+    GROUP BY id_habitacion
+)
+SELECT
+    c.puesto,
+    h.id_habitacion,
+    h.numero_habitacion,
+    a.nombre AS alojamiento,
+    m.nombre AS municipio,
+    c.cantidad_reservas,
+    c.ingreso_total
+FROM conteo c
+JOIN habitacion h  ON h.id_habitacion  = c.id_habitacion
+JOIN alojamiento a ON a.id_alojamiento = h.id_alojamiento
+JOIN municipio m   ON m.id_municipio   = a.id_municipio
+WHERE c.puesto <= :top
+ORDER BY c.puesto, h.id_habitacion;
 
 PROMPT
 PROMPT === Script 04 finalizado ===

@@ -40,7 +40,7 @@ public class MonitorController {
                 """).query().listOfRows());
     }
 
-    /** Intentos de reserva + pago, incluidos los que hicieron ROLLBACK. */
+    /** Reservas (con y sin pago) y abonos, incluidos los intentos que hicieron ROLLBACK. */
     @GetMapping("/log-transacciones")
     public List<LogTransaccion> logTransacciones(@RequestParam(defaultValue = "50") int limite) {
         return jdbc.sql("""

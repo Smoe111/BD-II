@@ -41,12 +41,12 @@ public class ReservaServicio {
         this.jdbc = jdbc;
     }
 
-    /** pkg_turismo.sp_crear_reserva (p_confirmar queda en TRUE: hace COMMIT). */
+    /** pkg_transacciones.sp_reservar_sin_pago: sp_crear_reserva + COMMIT + bitacora (SIN_PAGO). */
     public ReservaDetalle crear(CrearReserva r) {
         Fechas.validarRango(r.checkin(), r.checkout(), "checkin", "checkout");
         Long id = plsql.ejecutar(con -> {
             try (CallableStatement cs = con.prepareCall(
-                    "BEGIN pkg_turismo.sp_crear_reserva(?, ?, ?, ?, ?, ?, ?); END;")) {
+                    "BEGIN pkg_transacciones.sp_reservar_sin_pago(?, ?, ?, ?, ?, ?, ?); END;")) {
                 cs.setLong(1, r.idCliente());
                 cs.setLong(2, r.idUsuarioSistema());
                 cs.setObject(3, r.checkin());

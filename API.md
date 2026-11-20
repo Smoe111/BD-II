@@ -79,7 +79,7 @@ GET /api/habitaciones/2/cotizacion?checkin=2026-12-29&checkout=2027-01-03
 
 | Método | Ruta | Qué hace | Objeto de BD |
 |---|---|---|---|
-| POST | `/api/reservas` | Crea una reserva `PENDIENTE` (una o varias habitaciones) | `pkg_turismo.sp_crear_reserva` |
+| POST | `/api/reservas` | Crea una reserva `PENDIENTE` (una o varias habitaciones) | `pkg_transacciones.sp_reservar_sin_pago` (llama a `pkg_turismo.sp_crear_reserva` y escribe la bitácora) |
 | POST | `/api/reservas/con-pago` | Reserva + servicios + pago en **una transacción** | `pkg_transacciones.sp_reservar_y_pagar` |
 | POST | `/api/reservas/{id}/pagos` `{"valor":50000,"metodoPago":"EFECTIVO"}` | Pago total o abono al saldo pendiente | `pkg_transacciones.sp_registrar_abono` |
 | GET | `/api/reservas/{id}` | Cabecera, habitaciones, servicios y pagos | — |
@@ -147,6 +147,8 @@ en el mismo bloque que el `UPDATE`, y queda en `usuarioApp`.
 | POST | `/api/reportes/ocupacion-mensual/refresco` | 6. Refresco completo bajo demanda (`DBMS_MVIEW.REFRESH`) |
 | GET | `/api/reportes/estado-financiero?reserva=&cliente=&limite=` | 7. **UNPIVOT** del estado financiero |
 | GET | `/api/reportes/cartera` | 8. Consulta libre: cartera pendiente por municipio |
+| GET | `/api/reportes/habitaciones-temporada?tipo=ALTA&temporada=&top=5` | 9. Habitaciones con más reservas por tipo de temporada (`ALTA`/`BAJA`/`DESCUENTO`, deducido del porcentaje; **DENSE_RANK**). `temporada` es opcional; un `tipo` distinto responde `400` |
+| GET | `/api/reportes/temporadas` | Temporadas con su tipo, para el filtro del reporte 9 |
 
 La consulta 6 necesita que `04_consultas.sql` se haya ejecutado (es el script que crea
 la vista materializada). Si no se ejecutó, la API responde `503` con ese aviso.
@@ -167,7 +169,7 @@ funcionan igual, pero con `TABLE ACCESS FULL`.
 | Método | Ruta | Qué hace | Objeto de BD |
 |---|---|---|---|
 | GET | `/api/admin/bloqueos` | Sesiones de `turismouq` y quién bloquea a quién | `V_MONITOR_BLOQUEOS` |
-| GET | `/api/admin/log-transacciones?limite=50` | Intentos de reserva + pago, incluidos los revertidos | `LOG_TRANSACCION` (transacción autónoma) |
+| GET | `/api/admin/log-transacciones?limite=50` | Reservas con y sin pago y abonos, incluidos los intentos revertidos | `LOG_TRANSACCION` (transacción autónoma) |
 
 ## Errores
 

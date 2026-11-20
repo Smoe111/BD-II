@@ -10,5 +10,6 @@ export const REPORTES_RUTAS: Routes = [
   { path: 'tendencia', title: titulo('Tendencia'), loadComponent: () => import('./tendencia').then((m) => m.ReporteTendenciaComponent) },
   { path: 'reservas', title: titulo('Reservas por fechas'), loadComponent: () => import('./reservas-rango').then((m) => m.ReporteReservasComponent) },
   { path: 'ocupacion-mensual', title: titulo('Vista materializada'), loadComponent: () => import('./vista-materializada').then((m) => m.ReporteVistaComponent) },
+  { path: 'temporada-alta', title: titulo('Habitaciones por temporada'), loadComponent: () => import('./habitaciones-temporada').then((m) => m.ReporteHabitacionesTemporadaComponent) },
   { path: 'cartera', title: titulo('Cartera'), loadComponent: () => import('./cartera').then((m) => m.ReporteCarteraComponent) },
 ];

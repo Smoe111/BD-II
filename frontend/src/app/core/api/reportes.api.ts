@@ -2,12 +2,12 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
-  CarteraMunicipio, EstadoFinanciero, FechaIso, IngresoCubo, OcupacionMensual, OcupacionMunicipio,
-  ReservaRango, TopAlojamiento, VariacionMensual,
+  CarteraMunicipio, EstadoFinanciero, FechaIso, HabitacionTemporada, IngresoCubo, OcupacionMensual,
+  OcupacionMunicipio, ReservaRango, Temporada, TipoTemporada, TopAlojamiento, VariacionMensual,
 } from './modelos';
 import { parametros } from './parametros';
 
-/** Las 8 consultas analiticas de la Entrega 1 (04_consultas.sql). */
+/** Las consultas analiticas de 04_consultas.sql (las 8 de la Entrega 1 y la 9). */
 @Injectable({ providedIn: 'root' })
 export class ReportesApi {
   private readonly http = inject(HttpClient);
@@ -59,5 +59,16 @@ export class ReportesApi {
   /** 8. Cartera pendiente por municipio. */
   cartera(): Observable<CarteraMunicipio[]> {
     return this.http.get<CarteraMunicipio[]>(`${this.base}/cartera`);
+  }
+
+  /** Temporadas (por nombre) con su tipo, para el filtro de la consulta 9. */
+  temporadas(): Observable<Temporada[]> {
+    return this.http.get<Temporada[]>(`${this.base}/temporadas`);
+  }
+
+  /** 9. Habitaciones con mas reservas en un tipo de temporada (DENSE_RANK). */
+  habitacionesPorTemporada(filtro: { tipo: TipoTemporada; temporada?: string | null; top: number }):
+    Observable<HabitacionTemporada[]> {
+    return this.http.get<HabitacionTemporada[]>(`${this.base}/habitaciones-temporada`, { params: parametros(filtro) });
   }
 }

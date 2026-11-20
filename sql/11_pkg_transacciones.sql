@@ -9,7 +9,8 @@
 --   sqlplus turismouq/TurismoUQ2026*@localhost:1521/XEPDB1 @11_pkg_transacciones.sql
 --
 -- Contenido:
---   LOG_TRANSACCION        Bitacora de cada intento de reserva + pago.
+--   LOG_TRANSACCION        Bitacora de cada intento de reserva (con o
+--                          sin pago) y de cada abono.
 --   pkg_transacciones
 --     sp_log               Escribe en la bitacora con PRAGMA
 --                          AUTONOMOUS_TRANSACTION: el registro sobrevive
@@ -28,6 +29,9 @@
 --           └─ si falla: ROLLBACK TO sp_inicio (ROLLBACK TOTAL: no queda
 --              ni reserva ni pago; "todo o nada")
 --     COMMIT  ← una sola vez, al final
+--     sp_reservar_sin_pago Reserva PENDIENTE sin pago (envuelve a
+--                          pkg_turismo.sp_crear_reserva) y la registra en
+--                          la bitacora como SIN_PAGO.
 --     sp_registrar_abono   Pago total o abono al saldo de una reserva ya
 --                          creada. Bloquea la fila de la reserva con
 --                          SELECT ... FOR UPDATE: dos abonos simultaneos
@@ -80,23 +84,29 @@ CREATE TABLE log_transaccion (
   usuario_bd    VARCHAR2(30)   DEFAULT SYS_CONTEXT('USERENV','SESSION_USER') NOT NULL,
   id_cliente    NUMBER,
   habitaciones  VARCHAR2(200),
-  id_reserva    NUMBER,          -- NULL si la reserva se deshizo
+  id_reserva    NUMBER,          -- NULL si la reserva se deshizo (en un abono fallido, la reserva a la que se intento pagar)
   id_pago       NUMBER,
   resultado     VARCHAR2(16)   NOT NULL,
-  paso          VARCHAR2(12),    -- RESERVA | SERVICIOS | PAGO
+  paso          VARCHAR2(12),    -- RESERVA | SERVICIOS | PAGO | ABONO
   codigo_error  NUMBER,
   mensaje       VARCHAR2(400),
   CONSTRAINT pk_log_transaccion PRIMARY KEY (id_log)
              USING INDEX TABLESPACE ts_turismo_idx,
+  -- COMPLETA / ROLLBACK_PARCIAL : sp_reservar_y_pagar
+  -- SIN_PAGO                    : sp_reservar_sin_pago (reserva PENDIENTE)
+  -- ABONO                       : sp_registrar_abono
+  -- ROLLBACK_TOTAL              : cualquiera de los tres fallo (ver PASO)
   CONSTRAINT ck_log_resultado CHECK (resultado IN ('COMPLETA',
                                                    'ROLLBACK_PARCIAL',
-                                                   'ROLLBACK_TOTAL')),
+                                                   'ROLLBACK_TOTAL',
+                                                   'SIN_PAGO',
+                                                   'ABONO')),
   CONSTRAINT ck_log_paso CHECK (paso IS NULL
-                                OR paso IN ('RESERVA','SERVICIOS','PAGO'))
+                                OR paso IN ('RESERVA','SERVICIOS','PAGO','ABONO'))
 ) TABLESPACE ts_turismo_hist;
 
 COMMENT ON TABLE log_transaccion IS
-  'Intentos de reserva + pago (pkg_transacciones). Se escribe con transaccion autonoma';
+  'Intentos de reserva (con o sin pago) y abonos (pkg_transacciones). Se escribe con transaccion autonoma';
 
 -- =====================================================================
 -- 2. Especificacion
@@ -132,9 +142,20 @@ CREATE OR REPLACE PACKAGE pkg_transacciones AS
                                  p_id_pago            OUT NUMBER,
                                  p_resultado          OUT VARCHAR2);
 
+  -- Reserva PENDIENTE sin pago: pkg_turismo.sp_crear_reserva + bitacora.
+  -- Hace COMMIT. Si falla, deshace todo y registra ROLLBACK_TOTAL.
+  PROCEDURE sp_reservar_sin_pago (p_id_cliente         IN  NUMBER,
+                                  p_id_usuario_sistema IN  NUMBER,
+                                  p_checkin            IN  DATE,
+                                  p_checkout           IN  DATE,
+                                  p_num_huespedes      IN  NUMBER,
+                                  p_habitaciones       IN  VARCHAR2,
+                                  p_id_reserva         OUT NUMBER);
+
   -- Pago total o abono al saldo pendiente de una reserva existente.
   -- Si la reserva esta PENDIENTE, lo pagado tras el abono debe cubrir el
   -- anticipo (c_pct_anticipo) y entonces pasa a CONFIRMADA. Hace COMMIT.
+  -- Queda en la bitacora como ABONO (o ROLLBACK_TOTAL, paso ABONO).
   --   p_saldo : saldo pendiente despues del abono
   PROCEDURE sp_registrar_abono (p_id_reserva  IN  NUMBER,
                                 p_valor       IN  NUMBER,
@@ -380,6 +401,50 @@ CREATE OR REPLACE PACKAGE BODY pkg_transacciones AS
   END sp_reservar_y_pagar;
 
   -- -------------------------------------------------------------------
+  -- sp_reservar_sin_pago
+  -- -------------------------------------------------------------------
+  -- La validacion completa es la de pkg_turismo.sp_crear_reserva; aqui
+  -- solo se confirma y se deja rastro en la bitacora. Se llama con
+  -- p_confirmar => FALSE para que el COMMIT ocurra ANTES de escribir el
+  -- SIN_PAGO: la bitacora no debe anunciar una reserva que aun podria
+  -- deshacerse. (pkg_turismo no llama a sp_log directamente porque se
+  -- compila en el script 07, antes de que exista LOG_TRANSACCION.)
+  -- -------------------------------------------------------------------
+  PROCEDURE sp_reservar_sin_pago (p_id_cliente         IN  NUMBER,
+                                  p_id_usuario_sistema IN  NUMBER,
+                                  p_checkin            IN  DATE,
+                                  p_checkout           IN  DATE,
+                                  p_num_huespedes      IN  NUMBER,
+                                  p_habitaciones       IN  VARCHAR2,
+                                  p_id_reserva         OUT NUMBER)
+  IS
+    v_code NUMBER;
+    v_msg  VARCHAR2(400);
+  BEGIN
+    SAVEPOINT sp_sin_pago;
+    pkg_turismo.sp_crear_reserva(p_id_cliente, p_id_usuario_sistema,
+                                 p_checkin, p_checkout, p_num_huespedes,
+                                 p_habitaciones, p_id_reserva,
+                                 p_confirmar => FALSE);
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('  COMMIT: reserva ' || p_id_reserva || ' PENDIENTE, sin pago');
+
+    sp_log(p_id_cliente, p_habitaciones, p_id_reserva, NULL,
+           'SIN_PAGO', NULL, NULL, NULL);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      v_code := SQLCODE;
+      v_msg  := SQLERRM;
+      ROLLBACK TO sp_sin_pago;
+      DBMS_OUTPUT.PUT_LINE('  ROLLBACK TO sp_sin_pago: ' || v_msg);
+      sp_log(p_id_cliente, p_habitaciones, NULL, NULL,
+             'ROLLBACK_TOTAL', 'RESERVA', v_code, v_msg);
+      p_id_reserva := NULL;
+      RAISE;
+  END sp_reservar_sin_pago;
+
+  -- -------------------------------------------------------------------
   -- sp_registrar_abono
   -- -------------------------------------------------------------------
   -- Concurrencia: el SELECT ... FOR UPDATE toma el bloqueo TX de la fila
@@ -400,6 +465,10 @@ CREATE OR REPLACE PACKAGE BODY pkg_transacciones AS
     v_saldo   NUMBER;
     v_minimo  NUMBER;
     v_nuevo   reserva.estado%TYPE;
+    v_cliente reserva.id_cliente%TYPE;
+    v_habs    VARCHAR2(200);
+    v_code    NUMBER;
+    v_msg     VARCHAR2(400);
   BEGIN
     SAVEPOINT sp_abono;
 
@@ -411,8 +480,8 @@ CREATE OR REPLACE PACKAGE BODY pkg_transacciones AS
     END IF;
 
     BEGIN
-      SELECT estado, valor_total, valor_pagado
-        INTO v_estado, v_total, v_pagado
+      SELECT estado, valor_total, valor_pagado, id_cliente
+        INTO v_estado, v_total, v_pagado, v_cliente
         FROM reserva
        WHERE id_reserva = p_id_reserva
          FOR UPDATE;
@@ -421,6 +490,11 @@ CREATE OR REPLACE PACKAGE BODY pkg_transacciones AS
         RAISE_APPLICATION_ERROR(-20054,
           'La reserva ' || NVL(TO_CHAR(p_id_reserva), 'NULL') || ' no existe.');
     END;
+    -- Habitaciones de la reserva, solo para la bitacora
+    SELECT SUBSTR(LISTAGG(id_habitacion, ',') WITHIN GROUP (ORDER BY id_habitacion), 1, 200)
+      INTO v_habs
+      FROM reserva_habitacion
+     WHERE id_reserva = p_id_reserva;
     DBMS_OUTPUT.PUT_LINE('  [1] Reserva ' || p_id_reserva || ' bloqueada (FOR UPDATE), estado ' ||
                          v_estado || ', saldo ' || TO_CHAR(v_total - v_pagado, 'FM999G999G990'));
 
@@ -468,11 +542,22 @@ CREATE OR REPLACE PACKAGE BODY pkg_transacciones AS
     DBMS_OUTPUT.PUT_LINE('  COMMIT: saldo pendiente ' || TO_CHAR(p_saldo, 'FM999G999G990') ||
                          CASE WHEN p_saldo = 0 THEN ' (reserva paga en su totalidad)' END);
 
+    sp_log(v_cliente, v_habs, p_id_reserva, p_id_pago, 'ABONO', NULL, NULL,
+           'Saldo pendiente: ' || TO_CHAR(p_saldo, 'FM999G999G990') ||
+           CASE WHEN v_nuevo <> v_estado THEN ' (reserva ' || v_nuevo || ')' END);
+
   EXCEPTION
     WHEN OTHERS THEN
+      v_code := SQLCODE;
+      v_msg  := SQLERRM;
       -- Deshace lo hecho desde sp_abono y libera el bloqueo de la fila
       ROLLBACK TO sp_abono;
-      DBMS_OUTPUT.PUT_LINE('  ROLLBACK TO sp_abono: ' || SQLERRM);
+      DBMS_OUTPUT.PUT_LINE('  ROLLBACK TO sp_abono: ' || v_msg);
+      -- id_reserva se guarda aunque el abono falle: la reserva sigue
+      -- existiendo (o es la que no existe, -20054), y asi se ve a cual
+      -- se intento pagar.
+      sp_log(v_cliente, v_habs, p_id_reserva, NULL,
+             'ROLLBACK_TOTAL', 'ABONO', v_code, v_msg);
       p_id_pago := NULL;
       p_saldo   := NULL;
       RAISE;

@@ -138,8 +138,8 @@ export interface Bloqueo {
 export interface LogTransaccion {
   idLog: number; fecha: FechaIso; usuarioBd: string; idCliente: number | null; habitaciones: string | null;
   idReserva: number | null; idPago: number | null;
-  resultado: 'COMPLETA' | 'ROLLBACK_PARCIAL' | 'ROLLBACK_TOTAL';
-  paso: 'RESERVA' | 'SERVICIOS' | 'PAGO' | null; codigoError: number | null; mensaje: string | null;
+  resultado: 'COMPLETA' | 'ROLLBACK_PARCIAL' | 'ROLLBACK_TOTAL' | 'SIN_PAGO' | 'ABONO';
+  paso: 'RESERVA' | 'SERVICIOS' | 'PAGO' | 'ABONO' | null; codigoError: number | null; mensaje: string | null;
 }
 
 // ---------------- Reportes (Entrega 1) ----------------
@@ -172,6 +172,13 @@ export interface EstadoFinanciero {
 export interface CarteraMunicipio {
   municipio: string; cantidadReservas: number; totalFacturado: number; totalRecaudado: number;
   carteraPendiente: number; porcentajeCartera: number;
+}
+/** Tipo deducido del porcentaje de TEMPORADA: recargo = ALTA, 0 = BAJA, negativo = DESCUENTO. */
+export type TipoTemporada = 'ALTA' | 'BAJA' | 'DESCUENTO';
+export interface Temporada { nombre: string; porcentaje: number; tipo: TipoTemporada; }
+export interface HabitacionTemporada {
+  puesto: number; idHabitacion: number; numeroHabitacion: string; idAlojamiento: number;
+  alojamiento: string; municipio: string; cantidadReservas: number; ingresoTotal: number;
 }
 
 // ---------------- Operacion diaria (Entrega 3) ----------------
